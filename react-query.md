@@ -118,6 +118,8 @@ React Query (hay TanStack Query) là một thư viện hỗ trợ **fetching**, 
 - Đóng gói thao tác query và mutation với các states như error, loading,...
 - Caching: có thể chia sẻ dữ liệu cho nhiều Components, giảm số lượng requests lên server, tự động cập nhật dữ liệu cache cũ
 
+Trong hầu hết ứng dụng, nếu như đã chuyển các Server States cho React Query xử lý thì sẽ chỉ còn rất ít Client States, ta hoàn toàn có thể sử dụng Context API để xử lý chúng. Với một vài ứng dụng đặc thù, khi số lượng Client State rất lớn (ví dụ ứng dụng đồ họa), ta có thể kết hợp sử dụng một thư viện quản lý Client State như Redux hay Zustand,...
+
 Tải React Query cho ứng dụng
 
 ```bash
@@ -147,8 +149,8 @@ Key của Query được dùng nội bộ phục vụ cho các chức năng củ
 - `status` - mô tả trạng thái sẵn sàng của dữ liệu (`pending`, `error`, `success`)
 - `isPending`, `isError`, `isSuccess`
 - `error`, `data`
-- `isFetching`
 - `fetchingStatus` - mô tả trạng thái của việc thực thi (`fetching`, `paused` - đã đến thời điểm để fetch nhưng điều kiện chưa cho phép, `idle`) - mô tả trạng thái của việc thực thi `queryFn`
+- `isFetching` - có thể sử dụng giá trị này để biết khi nào React Query tự động refetch 
 
 Chú ý: [Tham khảo](https://tkdodo.eu/blog/status-checks-in-react-query) React Query sử dụng cơ chế **stale-while-revalidate**, tức là khi đang refetch (để lấy dữ liệu mới) thì dữ liệu cũ (trong `data`) được giữ nguyên.
 - Do React Query có cơ chế tự động refetch nên trạng thái của dữ liệu `status` có thể thay đổi liên tục.
@@ -165,7 +167,230 @@ Thông thường, danh sách các biến mà `queryFn` phụ thuộc vào nên x
 
 Về caching, keys được dùng để truy xuất dữ liệu cache bằng việc hashing giá trị keys và tìm kiếm. `queryFn` sẽ được gọi tự động (refetch) khi `queryKey` thay đổi (cache miss).
 
-`queryFn` không nên được thiết kế để được gọi thủ công (imperative, như trong một event handler), thay vào đó cần thiết kế lại để event handler thực hiện thay đổi `queryKey` (từ đó chạy lại `queryFn`)
+`queryFn` không nên được thiết kế để được gọi thủ công (imperative, như trong một event handler), thay vào đó cần thiết kế lại để event handler thực hiện thay đổi `queryKey` (từ đó chạy lại `queryFn`).
+
+Ta có thể định nghĩa Query Keys cho toàn bộ ứng dụng trong một file, từ đó dễ dàng bảo trì và phát triển. Kỹ thuật này gọi là **Query Key Factory**. Query Key Factory đơn giản chỉ là một object với giá trị của mỗi entry là một hàm trả về Query Keys cho tính năng tương ứng.
+
+VD:
+
+```js
+export const queries = createQueryKeyStore({
+  users: {
+    all: null,
+    detail: (userId: string) => ({
+      queryKey: [userId],
+      queryFn: () => api.getUser(userId),
+    }),
+  },
+  todos: {
+    detail: (todoId: string) => [todoId],
+    list: (filters: TodoFilters) => ({
+      queryKey: [{ filters }],
+      queryFn: (ctx) => api.getTodos({ filters, page: ctx.pageParam }),
+      contextQueries: {
+        search: (query: string, limit = 15) => ({
+          queryKey: [query, limit],
+          queryFn: (ctx) => api.getSearchTodos({
+            page: ctx.pageParam,
+            filters,
+            limit,
+            query,
+          }),
+        }),
+      },
+    }),
+  },
+});
+```
+
+### Query Functions
+
+`queryFn` có thể là bất kỳ function nào trả về `Promise`. Khi `queryFn` trả về rejected Promise (hoặc throw Error), error object sẽ được lưu trong `error` của Query instance.
+- `axios` và `graphql-request` sẽ throw Error cho các HTTP requests lỗi
+- `fetch` API lại không throw Error mà kiểm tra trạng thái dựa trên `response.ok`
+
+`queryKey` bên cạnh làm key cho Query instance, nó cũng được truyền làm đối số cho `queryFn`
+
+```tsx
+function Todos({ status, page }) {
+  const result = useQuery({
+    queryKey: ['todos', { status, page }],
+    queryFn: fetchTodoList,
+  })
+}
+
+// Access the key, status and page variables in your query function!
+function fetchTodoList({ queryKey }) {
+  const [_key, { status, page }] = queryKey
+  return new Promise()
+}
+```
+
+Tập các đối số truyền cho `queryFn` được gọi là `QueryFunctionContext`, một object với các key sau:
+- `queryKey`
+- `client`: **QueryClient**
+- `signal`: \[Optional] Một `AbortSignal` dùng để hủy Query
+- `meta`: \[Optional] Metadata của Query
+
+### Retries
+
+Khi thực hiện Query thất bại (`queryFn` trả về một lỗi) thì nó sẽ tự động được thử lại. Sau khi thử lại một số lần (mặc định 3) đều thất bại thì khi đó trạng thái mới là `error`.
+
+Ta có thể cấu hình cách thức retries cho Query (global hoặc local) như sau:
+- `retry = false`: Không bao giờ retry
+- `retry = true`: Retry không ngừng
+- `retry = 6`: Thay đổi số lần retry
+- `retry = (failureCount, error) => bool`: Tùy chỉnh cách thức xử lý khi Query có lỗi.
+
+Thực tế, giữa các lần gọi `queryFn` sẽ luôn có khoảng thời gian chờ, và tăng dần sau mỗi lần retry (tối đa 30s). Có thể cấu hình lại thời gian chờ này như sau:
+- `retryDelay = 1000`: Luôn chờ 1000ms
+- `retryDelay = (attemptIndex) => number`: Thời gian chờ tùy vào thứ tự gọi `queryFn` (1,2,...)
+
+### Network Modes
+
+React Query cung cấp 3 modes, ở đó cách thức xử lý (cho Query và Mutation) khác nhau khi trạng thái của kết nối (tới Server) khác nhau. Ta có thể cấu hình mode ở mức Query/Mutation instance, hoặc ở mức toàn cục.
+
+#### Always
+
+Đây là chế độ mà React Query luôn luôn thực hiện fetching bất chấp trạng thái kết nối.
+- Query không có trạng thái `paused`, luôn luôn thực hiện Retries
+- Retries thất bại sẽ chuyển thành `error`
+
+Mode này chỉ phù hợp nếu như việc kết nối tới Server có thể diễn ra ngay lập tức và có thể đảm bảo kết quả nhận được, ví dụ như truy cập vào bộ nhớ cục bộ `AsyncStorage`.
+
+#### offlineFirst
+
+Đây là chế độ mà React Query chỉ thực hiện `queryFn` một lần duy nhất (bất kể có kết nối mạng hay không), và không thực hiện Retries nếu lần fetch đó không thành công.
+
+Điều này là hợp lý vì: *Tại sao phải thử lại khi tôi biết là đã không thể kết nối mạng?*
+
+Mode này phù hợp khi ứng dụng triển khai một lớp cache nữa, ví dụ Service Worker, một bộ chặn request và trả dữ liệu cache nếu có.
+
+#### Online
+
+Đây là chế độ mặc định của React Query, chỉ thực hiện fetch (và retries) nếu có kết nối. Nếu không có kết nối, fetch (và retries) sẽ ở trạng thái `paused`. Sau đó, nếu kết nối được khôi phục, lần fetch (và retries) đó sẽ tự động được tiếp tục (nếu Query chưa bị cancel)
+
+### Parallel Queries
+
+Khi Components định nghĩa nhiều `useQuery` thì các Queries đó sẽ được thực thi song song.
+
+Khi số lượng Queries là không xác định trước (thay đổi ở mỗi lần render Component) thì ta có thể sử dụng `useQueries`
+
+```tsx
+function App({ users }) {
+  const userQueries = useQueries({
+    queries: users.map((user) => {
+      return {
+        queryKey: ['user', user.id],
+        queryFn: () => fetchUserById(user.id),
+      }
+    }),
+  })
+}
+```
+
+### Serial Queries
+
+Khi các Queries phụ thuộc vào nhau (Query này kết thúc mới thực hiện Queries tiếp theo), ta có thể sử dụng option `enabled` để xác định điều kiện thực thi cho một Query. VD: Khi fetch projects ứng với một user, ta cần một Query để lấy user và chỉ `enabled` Query lấy các projects chỉ khi đã có kết quả cho user.
+
+```tsx
+// Get the user
+const { data: user } = useQuery({
+  queryKey: ['user', email],
+  queryFn: getUserByEmail,
+})
+
+// if user is available, React Query changes the state then the component rerender with populated user.
+const userId = user?.id
+
+// Then get the user's projects
+const {
+  status,
+  fetchStatus,
+  data: projects,
+} = useQuery({
+  queryKey: ['projects', userId],
+  queryFn: getProjectsByUser,
+  // The query will not execute until the userId exists
+  enabled: !!userId,
+})
+```
+
+Trạng thái của Projects Query như sau:
+- Khởi tạo: `status = "pending"; fetchStatus = "idle"`
+- Khi User Query thành công: `status = "pending"; fetchStatus = "fetching"`
+- Khi Projects Query thành công: `status = "success"; fetchStatus = "idle"`
+
+Khi Query phụ thuộc là Parallel Queries, ta có thể disable nó bằng việc truyền một mảng rỗng cho `useQueries`
+
+```tsx
+// Get the users ids
+const { data: userIds } = useQuery({
+  queryKey: ['users'],
+  queryFn: getUsersData,
+  select: (users) => users.map((user) => user.id),
+})
+
+// Then get the users messages
+const usersMessages = useQueries({
+  queries: userIds
+    ? userIds.map((id) => {
+        return {
+          queryKey: ['messages', id],
+          queryFn: () => getMessagesByUsers(id),
+        }
+      })
+    : [], // if users is undefined, an empty array will be returned
+})
+```
+
+### Paginated Queries
+
+Ta có thể triển khai chức năng phân trang đơn giản như Query sau:
+
+```tsx
+const result = useQuery({
+  queryKey: ['projects', page],
+  queryFn: fetchProjects,
+})
+```
+
+Tuy nhiên, UI của các pages sẽ liên tục thay đổi ở trạng thái có dữ liệu và loading khi di chuyển giữa các trang. Ta có thể khắc phục bằng option `placeholderData` để sử dụng lại dữ liệu trang cũ khi đang fetching trang mới (kể cả khi `queryKey` đã thay đổi).
+
+```tsx
+const { isPending, isError, error, data, isFetching, isPlaceholderData } =
+    useQuery({
+      queryKey: ['projects', page],
+      queryFn: () => fetchProjects(page),
+      placeholderData: keepPreviousData,
+    })
+```
+
+Giá trị của `placeholderData` có thể là:
+- `(previousData) => ...`
+- `keepPreviousData`: Tương đương `(previousData) => previousData`
+
+`isPlaceholderData` của Query instance có thể được dùng để kiểm tra dữ liệu mới đã có sẵn hay chưa.
+
+### Infinite Queries
+
+Với tính năng Infinite Scroll, ta có thể sử dụng `useInfiniteQuery`. Tính năng này được thiết kế để tự động gọi `queryFn` mỗi khi có sự kiện lấy dữ liệu page tiếp theo được kích hoạt. React Query hỗ trợ lấy page ở hai hướng: page phía sau (fetch **Next**) và page phía trước (fetch **Previous**).
+
+
+Hook này tương tự `useQuery` với một số khác biệt về đối số:
+- `initialPageParam`: Đối số sẽ dùng trong `queryFn` khi fetch page đầu tiên.
+- `getNextPageParam: (lastPage, allPages, lastPageParam, allPageParams)`: Hàm được gọi để lấy đối số truyền cho `queryFn` trong lần fetch **Next** tiếp theo. Trả về `null | undefined` tức là không còn page phía sau.
+- `getPreviousPageParam: (firstPage, allPages, firstPageParam, allPageParams)`: Hàm được gọi để lấy đối số truyền cho `queryFn` trong lần fetch **Previous** tiếp theo. Trả về `null | undefined` tức là không còn page phía trước.
+- `maxPages`: Số lượng pages tối đa. Khi các pages đã được fetch đầy đủ thì mảng dữ liệu các pages sẽ bị loại phần tử ở đầu (nếu fetch **Next**) hoặc ở cuối (nếu fetch **Previous**). Xác định `0 | undefined` tức là không giới hạn (không biết trước) số lượng pages.
+
+Và nó trả về các dữ liệu sau:
+- `data.pages`: Mảng chứa dữ liệu của tất cả các pages.
+- `data.pageParams`: Mảng chứa param (đối số cho `queryFn`) của tất cả các pages.
+- `isFetchingNextPage`, `isFetchingPreviousPage`: Khi fetch **Next**/**Previous** đang được thực thi.
+- `hasNextPage`, `hasPreviousPage`: Dựa trên page Param để biết còn page phía sau/phía trước hay không.
+- `fetchNextPage: (options) => Promise`: Một hàm có thể gọi để kích hoạt sự kiện fetch **Next**. Có thể cấu hình cách thức fetch **Next** bằng việc truyền vào đối số `options` khi gọi hàm này
+  - `options.cancelRefetch`: Cách xử lý khi sự kiện fetch **Next** kích hoạt liên tục. Truyền `false` nếu muốn việc kích hoạt sẽ bị bỏ qua nếu như lần kích hoạt đầu tiên chưa hoàn thành (`queryFn` chưa hoàn thành). Khi truyền `true` (mặc định) thì các lần kích hoạt sau sẽ hủy việc thực thi của các lần kích hoạt trước.
+- `fetchPreviousPage: (options) => Promise`: Tương tự `fetchNextPage` nhưng dành cho sự kiện fetch **Previous**.
 
 ## References
 

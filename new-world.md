@@ -97,10 +97,10 @@ Then, add private keys into SSH Agent
 eval "$(ssh-agent -s)"
 
 ssh-add ~/.ssh/github-personal
-#--- enter paraphrase (if have)
+#--- enter passphrase (if have)
 
 ssh-add ~/.ssh/github-work
-#--- enter paraphrase (if have)
+#--- enter passphrase (if have)
 ```
 
 Open GitHub accounts and add public keys to it....
@@ -128,22 +128,33 @@ So, if you test with
 ssh -T git@github.com
 ```
 You will receive:
-> Hi <personal-account-name>! You've successfully authenticated, but GitHub does not provide shell access.
+> Hi \<personal-account-name>! You've successfully authenticated, but GitHub does not provide shell access.
+
 and if you using
 ```bash
 ssh -T git@work.github.com
 ```
 you will see your work account name.
 
-Do you see the point? When cloning from work repository, if you use `git clone git@github.com:staff-name/repository`, the used ssh key will be personal... :)
+Do you see the point? When cloning from work repository, if you use `git clone git@github.com:staff-name/repository`, the used ssh key will be the personal one... :smiley:
+
 So, I will use Git Config to fix this case using [url.<base>.insteadOf option](https://git-scm.com/docs/git-config#Documentation/git-config.txt-urlltbasegtinsteadOf):
+
+I set the url to `git@work.github.com` (the ssh alias) instead of `git@github.com` for every git repositories in `w` directory.
+
 ```ini
 # ~/w/.gitconfig
 [url "git@work.github.com:"]
-	insteadOf = git@github.com:
+  insteadOf = git@github.com:
 ```
 
 10/10 for what I have learned today (2025-02-20)
+
+If you are tired of typing passphrase for ssh, you can try this command to remove the passphrase. Passphrase is used to encrypt the private key inside the file (an extra layer of protection).
+
+```bash
+ssh-keygen -p -f <path_to_private_key_file> -P <old_passphrase> -N ""
+```
 
 ### Visual Studio Code
 
