@@ -1,6 +1,6 @@
 # React Query
 
-## Tại sao lại cần React Query
+## Reason for using React Query
 
 - [Why React Query](https://ui.dev/why-react-query)
 
@@ -246,6 +246,69 @@ Thực tế, giữa các lần gọi `queryFn` sẽ luôn có khoảng thời gi
 - `retryDelay = 1000`: Luôn chờ 1000ms
 - `retryDelay = (attemptIndex) => number`: Thời gian chờ tùy vào thứ tự gọi `queryFn` (1,2,...)
 
+### Prepopulate and Placeholder
+
+Để tăng trải nghiệm người dùng, ta nên hạn chế hiển thị giao diện Loading, và để làm được điều đó thì cần phải làm cho dữ liệu sẵn sàng ngay khi cần - Query có thể ở trạng thái `success` ngay lập tức.
+
+Ta có thể triển khai chức năng đó bằng: **Initial Data** và **Placeholder Data**.
+- **Initial Data** cho phép lưu tạm dữ liệu vào cache entry => **Prepopulate**
+- **Placeholder Data** cho phép lưu dữ liệu ở mức **observer** (một đối tượng phát hiện thay đổi dữ liệu trong một cache entry và thông báo cho đối tượng đăng ký nó, ví dụ đăng ký qua `useQuery`, tức là một cache entry có thể có nhiều observers)
+
+Điều đó khiến cho hai chức năng này khác nhau:
+- **Initial Data** ra lệnh ghi dữ liệu vào cache entry ngay khi tạo nó. Khi có một observer khác cũng dùng Initial Data để ghi (vào cùng cache entry) thì sẽ **không làm thay đổi dữ liệu đã có**.
+  - Do trong cache có dữ liệu nên React Query chỉ refetch khi cache entry hết hạn (`staleTime`)
+  - Khi refetch mà lỗi thì `status = error` nhưng `data` thì không đổi
+- **Placeholder Data** thì không ghi trực tiếp vào một cache entry mà dùng lại dữ liệu đã có (ví dụ dùng lại dữ liệu ở cache entry của Query cũ)
+  - Do trong cache chưa có dữ liệu nên React Query sẽ cần fetch
+  - Nếu fetch lỗi thì `status = error` và `data = undefined`
+
+Sự khác nhau này do mục đích sử dụng khác nhau:
+- Sử dụng **Initial Data** khi ta đã có dữ liệu đầy đủ cho Query, hoàn toàn có thể đại diện cho dữ liệu thực sự trong một khoảng thời gian.
+- Sử dụng **Placeholder Data** khi ta chỉ có một phần dữ liệu hoặc một dữ liệu tương tự, lưu vào cache entry là không hợp lý, việc fetching là cần thiết. Tuy nhiên, một phần dữ liệu này có thể tận dụng để hiển thị ngay lập tức trong layout. 
+  - VD: Khi đã lấy danh sách `Post`, ta đã có `title` và `author` cho một item cụ thể. => Chỉ có một phần dữ liệu
+  - VD: Trong màn phân trang, trang mới có thể hiển thị tạm thời dữ liệu của trang trước đó => Dữ liệu tương tự
+
+#### Initial Data
+
+**Initial Data** được cung cấp cho Query qua option: `initialData`.
+- Có thể xác định một hàm để xác định giá trị cho `initialData`. Hàm này chỉ được thực thi một lần ngay lần đầu thực thi Query (trước khi tạo cache entry).
+- Nếu đã xác định trước thời gian cập nhật cuối cùng của **Initial Data**, có thể xác định trong option `initialDataUpdatedAt` (một timestamp, theo ms). Giá trị này kết hợp với `staleTime` sẽ xác định thời điểm cần refetch.
+
+```tsx
+const result = useQuery({
+  queryKey: ['todo', todoId],
+  queryFn: () => fetch('/todos'),
+  initialData: () => 
+    // Use a todo from the 'todos' query as the initial data for this todo query
+    queryClient.getQueryData(['todos'])?.find((d) => d.id === todoId),
+  initialDataUpdatedAt: () =>
+    queryClient.getQueryState(['todos'])?.dataUpdatedAt,
+})
+```
+
+#### Placeholder Data
+
+**Placeholder Data** được cung cấp cho Query qua option: `placeholderData`.
+- Có thể xác định một hàm để xác định giá trị cho `placeholderData`. React Query sẽ cung cấp dữ liệu của lần thực thi Query trước vào đối số của hàm này. Tức là,ta có thể dùng lại dữ liệu của lần thực thi trước để tính toán dữ liệu cho lần thực thi hiện tại. 
+- Xem thêm [Paginated Query](#paginated-queries)
+
+```tsx
+function Todo({ blogPostId }) {
+  const queryClient = useQueryClient()
+  const result = useQuery({
+    queryKey: ['blogPost', blogPostId],
+    queryFn: () => fetch(`/blogPosts/${blogPostId}`),
+    placeholderData: () => {
+      // Use the smaller/preview version of the blogPost from the 'blogPosts'
+      // query as the placeholder data for this blogPost query
+      return queryClient
+        .getQueryData(['blogPosts'])
+        ?.find((d) => d.id === blogPostId)
+    },
+  })
+}
+```
+
 ### Network Modes
 
 React Query cung cấp 3 modes, ở đó cách thức xử lý (cho Query và Mutation) khác nhau khi trạng thái của kết nối (tới Server) khác nhau. Ta có thể cấu hình mode ở mức Query/Mutation instance, hoặc ở mức toàn cục.
@@ -392,6 +455,275 @@ Và nó trả về các dữ liệu sau:
   - `options.cancelRefetch`: Cách xử lý khi sự kiện fetch **Next** kích hoạt liên tục. Truyền `false` nếu muốn việc kích hoạt sẽ bị bỏ qua nếu như lần kích hoạt đầu tiên chưa hoàn thành (`queryFn` chưa hoàn thành). Khi truyền `true` (mặc định) thì các lần kích hoạt sau sẽ hủy việc thực thi của các lần kích hoạt trước.
 - `fetchPreviousPage: (options) => Promise`: Tương tự `fetchNextPage` nhưng dành cho sự kiện fetch **Previous**.
 
-## References
+## Mutation
+
+Nếu như Query thường dùng để fetch, tức là các HTTP Request dạng GET thì Mutation được thiết kế để tương tác với Server với các Request dạng POST, PATCH, PUT, DELETE.
+
+Do đó, Mutation được thiết kế để thực thi theo hướng mệnh lệnh (còn Query sẽ thực thi tự động, theo các khai báo). Mặc định, các Mutations là độc lập với nhau, chúng không được cache dữ liệu như Queries.
+
+Mỗi Mutation được tạo với một `mutationFn` (một async/Promise function) thực thi request và truyền cho `useMutation` hook.
+
+Tương tự Query, `useMutation` cũng trả về các dữ liệu sau: 
+- `status` (`isPending`, `isError`, `isSuccess`, `isIdle`)
+- `isPaused`
+- `error`, `data`
+- `reset`: Một hàm để xóa dữ liệu trong `error` và `data`, đưa Mutation về trạng thái khởi tạo.
+- `mutate`: Một hàm (async) trong đó sẽ gọi `mutationFn` và các **Callbacks**
+  - Đối số đầu tiên sẽ được truyền cho `mutationFn`
+  - Các đối số tiếp theo là các custom callbacks
+- `mutateAsync`: Dạng Asynchronous của `mutate`
+  - `mutate` không trả về giá trị, nhưng `mutateAsync` trả về Promise.
+  - Có thể sử dụng khi muốn đồng bộ các Promises
+
+
+Khác với Query, mặc định Mutation sẽ không retry. Tuy nhiên, ta có thể chỉ định số lần retry cho Mutation qua option `retry`
+
+### Callbacks
+
+Ta có thể thực thi một số logic trước/sau quá trình React Query thực hiện một `mutationFn` thông qua các Callbacks (Các Callbacks và `mutationFn` sẽ được kích hoạt trong `mutate` hoặc `mutateAsync`):
+- `onMutate(variables)`: Gọi trước khi `mutationFn` thực thi
+  - Nhận vào đối số đầu tiên của `mutate` (hay `mutateAsync`) - `variables`
+  - Kết quả trả về của nó sẽ được truyền cho `onError` và `onSettled` (thông qua đối số `context`)
+  - Phù hợp để thực thi [**Optimistic Updates**](#optimistic-updates)
+- `onSuccess(data, variables, context)`: Gọi khi `mutationFn` kết thúc thành công 
+  - Đối số là `data` trả về từ `mutationFn`
+  - Phù hợp để thực thi [**Invalidation**](#invalidation)
+  - Phù hợp để thực thi [**Direct Updates**](#direct-updates)
+- `onError(error, variables, context)`: Gọi khi có lỗi khi thực thi `mutationFn` 
+  - Đối số là `error` trả về từ `mutationFn`
+  - Phù hợp để thực thi [**Rollback trong Optimistic Updates**](#optimistic-updates)
+- `onSettled(data, error, variables, context)`: Gọi khi `mutationFn` kết thúc với bất kể trạng thái nào (thành công hay có lỗi)
+  - Đối số là `data` hoặc `error` trả về từ `mutationFn`
+  - Phù hợp để thực thi [**Invalidation**](#invalidation)
+
+
+**Chú ý**: *3 Callbacks `onSuccess`, `onError` và `onSettled` có thể trả về Promise. Khi đó React Query sẽ tự động await nó trước khi thực hiện tiếp phần còn lại của `mutate` (hay `mutateAsync`). Điều đó có nghĩa là thao tác `mutate` sẽ chưa thể kết thúc nếu chưa hoàn thành các Callbacks, tức là Mutations sẽ vẫn ở trạng thái `pending`*.
+
+4 Callbacks này có thể truyền vào `useMutation` và sẽ được thực thi với mọi lời gọi `mutate` và `mutateAsync`
+
+Ngoài ra, trong lời gọi `mutate` và `mutateAsync`, ta có thể truyền `onSuccess`, `onError` và `onSettled` để **thêm** logic xử lý cho các Callbacks định nghĩa trong `useMutation`. Các Callbacks trong lời gọi `mutate` và `mutateAsync` này sẽ được thực thi sau các Callbacks tương ứng truyền cho `useMutation`.
+
+**Chú ý**: *Khác với các phiên bản Callbacks truyền cho `useMutation` thì các Callbacks trong `mutate` không trả về giá trị.*
+
+**Chú ý**: *Nếu có nhiều lời gọi `mutate` thì `onSuccess` truyền vào hàm này sẽ chỉ được gọi một lần, ứng với lần gọi `mutate` cuối cùng.*
+
+```tsx
+useMutation({
+  mutationFn: addTodo,
+  onSuccess: (data, variables, context) => {
+    // Will be called 3 times
+  },
+})
+
+const todos = ['Todo 1', 'Todo 2', 'Todo 3']
+todos.forEach((todo) => {
+  mutate(todo, {
+    onSuccess: (data, variables, context) => {
+      // Will execute only once, for the last mutation (Todo 3),
+      // regardless which mutation resolves first
+    },
+  })
+})
+```
+
+**Chú ý**: *Các Callbacks trong `mutate` có thể không được thực thi nếu như component bị xóa trước khi Mutation kết thúc*
+- Điều đó nghĩa là nên đưa các logic quan trọng lên Callbacks trong `useMutation` (như **Invalidation**), và chỉ để các xử lý ít quan trọng (thiên về UI) ở `mutate` (như hiển thị thông báo, redirect,...)
+
+### Serial Mutations
+
+Mặc định các lời gọi `mutate` sẽ được thực thi song song. Để có thể thực hiện tuần tự chúng, ta cần chỉ định option `scope` là một object với `id` giống nhau.
+
+Khi một lời gọi `mutate` với `scope.id = xxx` được thực thi, React Query sẽ kiểm tra có bất kỳ lời gọi nào khác cùng `scope.id = xxx` hay không. Nếu không thì thực thi `mutate` hiện tại. Nếu có thì `mutate` hiện tại sẽ ở trạng thái `paused` và được đẩy vào hàng đợi, chờ đến khi các `mutate` khác (có cùng `scope`) hoàn thành.
+
+## Tie Mutations to Queries
+
+Mutations và Queries là độc lập với nhau, chúng không cùng chia sẻ bộ nhớ cache. Điều đó đòi hỏi cơ chế đồng bộ giữa Mutations và Queries, ví dụ như việc thêm một item cần phải đồng bộ vào danh sách các items.
+
+React Query cung cấp hai cách để thực hiện điều đó: **Invalidation** và **Direct Updates**
+
+**Invalidation** là việc chủ động thông báo cho React Query biết rằng dữ liệu trong cache của một Query (hay nhiều Queries) đã hết thời hạn. Từ đó, **chỉ khi mà dữ liệu Query đó được sử dụng** (**active query**), React Query sẽ thực hiện refetch.
+
+**Direct Updates** được sử dụng khi mà bản thân kết quả của Mutation có thể giúp xác định dữ liệu mới cho Query (ví dụ, Mutation để xóa có thể xác định ngay phần tử nào nên loại bỏ khỏi danh sách). Khi đó, việc refetch là không cần thiết.
+
+### Invalidation
+
+Để thực hiện **Invalidation**, đánh dấu một hay nhiều cache entry là hết hạn, ta sử dụng `queryClient.invalidateQueries(filters, options)`
+
+[Filters](https://tanstack.com/query/latest/docs/framework/react/guides/filters#query-filters) cho `invalidateQueries` là một object chứa các điều kiện để lọc các queries trong cache.
+- Nếu object rỗng thì sẽ tác động đến mọi Queries
+- Có thể truyền object với `queryKey` để lọc những Queries có trùng (`exact: true`) hoặc có prefix xác định
+- Có thể truyền cho `predicate` một hàm nhận vào Query object (từng phần tử cache entry) và trả về `true/false` xác định xem cache entry đó có được đánh dấu không. 
+
+Mặc định, sau khi đã đánh dấu hết hạn **invalid**, chỉ những Queries được sử dụng - **active queries** (queries được dùng trong khi render). Ta có thể cấu hình lại cơ chế này bằng option cho `Filters`
+- `refetchType: 'active'`: (Mặc định) Chỉ refetch active queries
+- `refetchType: 'inactive'`: Chỉ refetch inactive queries
+- `refetchType: 'none'`: Không refetch bất kể queries nào
+- `refetchType: 'all'`: Refetch tất cả matched queries
+
+`Options` cho `invalidateQueries` có hai thuộc tính:
+- `throwOnError`: Thiết lập `true` nếu muốn hàm này trả về lỗi nếu quá trình refetch không thành công (với bất kỳ query item nào)
+- `cancelRefetch`: Thiết lập `false` để chỉ định việc refetch sẽ không thực hiện nếu như query item đó đang được refetch. Nếu không, sẽ hủy refetch trước để thực hiện refetch hiện tại.
+
+### Direct Updates
+
+Khi kết quả trả về của một Mutation có thể xác định ngay dữ liệu (đầy đủ) cho một Query, ta có thể thực hiện tạo/cập nhật cache entry cho Query đó thông qua `queryClient.setQueryData(queryKey, updater)`.
+
+Ở đây `updater` là một hàm nhận vào dữ liệu cũ của cache entry, và cần trả về dữ liệu mới cho nó. *Không nên thiết kế để `updater` cập nhật trực tiếp lên giá trị cũ, mà nên tạo object mới*.
+
+Có thể cung cấp giá trị mới trực tiếp cho `updater`.
+
+Nếu giá trị mới là `undefined` thì dữ liệu cache entry sẽ không thay đổi.
+
+## Optimistic Updates
+
+Đây là một kỹ thuật để hạn chế ảnh hưởng của độ trễ phản hồi từ Server đến trải nghiệm người dùng. Cụ thể, với một thao tác cập nhật đơn giản, ví dụ như reaction hay follow, ta có thể thực hiện cập nhật UI ngay lập tức (coi như ngay lập tức nhận được phản hồi thành công) ngay cả khi Mutation vẫn đang được gửi đi. Đến khi nhận được phản hồi từ Server, *nếu có sự khác biệt*, ta có thể thực hiện **rollback** về trạng thái chưa thực hiện Mutation.
+
+Kỹ thuật này có thể được triển khai theo một số cách sau:
+
+#### Via the UI
+
+Cách này sử dụng trạng thái `pending` của Mutation (khi đang **Invalidation**) để tùy chỉnh UI trong 3 cases:
+- Optimistic Updates (`isPending = true`)
+- Refetch success (`isPending = false`)
+- Mutation error => Refetch (`isPending = false, isError = true`)
+
+```tsx
+const addTodoMutation = useMutation({
+  mutationFn: (newTodo: string) => axios.post('/api/data', { text: newTodo }),
+  // make sure to _return_ the Promise from the query invalidation
+  // so that the mutation stays in `pending` state until the refetch is finished
+  onSettled: async () => {
+    return await queryClient.invalidateQueries({ queryKey: ['todos'] })
+  },
+})
+
+const { isPending, submittedAt, variables, mutate, isError } = addTodoMutation
+
+render(
+  <ul>
+    {todoQuery.items.map((todo) => (
+      <li key={todo.id}>{todo.text}</li>
+    ))}
+    {
+      /** `variables` is the added todo 
+       * while refetch not finishing, the `isPending` still be `true`
+      */ 
+    }
+    {isPending && <li style={{ opacity: 0.5 }}>{variables}</li>}
+    {
+      isError && (
+        <li style={{ color: 'red' }}>
+          {variables}
+          <button onClick={() => mutate(variables)}>Retry</button>
+        </li>
+      )
+    }
+  </ul>
+)
+```
+
+Ưu điểm của cách này là đơn giản do chỉ tùy chỉnh UI theo state (và vì thế không phải thực hiện **rollback**). Tuy nhiên, hạn chế của nó là phạm vi ảnh hưởng giới hạn.
+
+#### Via the cache
+
+Cách này thực hiện Update dữ liệu Optimistic trực tiếp vào cache, và sau đó sẽ **Rollback** cache entry về giá trị cũ nếu có lỗi.
+- Lấy trạng thái của cache trước khi `mutate` (trong `onMutate`)
+- Optimistic Updates cho cache trước khi `mutate` (trong `onMutate`)
+- Trả về trạng thái cũ của cache cho các Callbacks phía sau
+- Khi có lỗi, khôi phục trạng thái của cache (trong `onError`) với dữ liệu cung cấp từ `onMutate`
+- Thực hiện **Invalidation** sau Mutation (trong `onSettled`)
+
+```tsx
+const queryClient = useQueryClient()
+
+useMutation({
+  mutationFn: updateTodo,
+  // When mutate is called:
+  onMutate: async (newTodo) => {
+    // Cancel any outgoing refetches
+    // (so they don't overwrite our optimistic update)
+    await queryClient.cancelQueries({ queryKey: ['todos'] })
+
+    // Snapshot the previous value
+    const previousTodos = queryClient.getQueryData(['todos'])
+
+    // Optimistically update to the new value
+    queryClient.setQueryData(['todos'], (old) => [...old, newTodo])
+
+    // Return a context object with the snapshotted value
+    return { previousTodos }
+  },
+  // If the mutation fails,
+  // use the context returned from onMutate to roll back
+  onError: (err, newTodo, context) => {
+    queryClient.setQueryData(['todos'], context.previousTodos)
+  },
+  // Always refetch after error or success:
+  onSettled: () => {
+    queryClient.invalidateQueries({ queryKey: ['todos'] })
+  },
+})
+```
+
+Cách này, do cập nhật trực tiếp vào cache nên phạm vi tác động của nó rộng hơn. Tuy nhiên, thao tác rollback là quan trọng.
+
+## Prefetching
+
+Nếu có thể dự đoán trước dữ liệu sẽ được dùng tiếp theo, ta có thể thực hiện prefetching để làm đầy cache cho Query đó. Ta có thể sử dụng `queryClient.prefetchQuery` và `queryClient.prefetchInfiniteQuery` với cú pháp tương tự `useQuery` và `useInfiniteQuery`.
+
+**Chú ý**: *Do chỉ là Prefetching (với mục đích ghi vào cache) nên các hàm này sẽ luôn trả về `Promise<void>` (không trả về dữ liệu) và cũng không trả về lỗi.*
+- Lỗi nên được xử lý ở Query thực sự.
+
+```tsx
+const prefetchTodos = async () => {
+  // The results of this query will be cached like a normal query
+  await queryClient.prefetchQuery({
+    queryKey: ['todos'],
+    queryFn: fetchTodos,
+  })
+}
+```
+
+```tsx
+const prefetchProjects = async () => {
+  // The results of this query will be cached like a normal query
+  await queryClient.prefetchInfiniteQuery({
+    queryKey: ['projects'],
+    queryFn: fetchProjects,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => lastPage.nextCursor,
+    pages: 3, // prefetch the first 3 pages
+  })
+}
+```
+
+### Event Handlers
+
+Ta có thể Prefetching khi người dùng tương tác với UI. VD: Ngay khi người dùng hover vào button xem chi tiết, ta có thể prefetch dữ liệu của trang xem chi tiết đó.
+
+```tsx
+function ShowDetailsButton() {
+  const queryClient = useQueryClient()
+
+  const prefetch = () => {
+    queryClient.prefetchQuery({
+      queryKey: ['details'],
+      queryFn: getDetailsData,
+      // Prefetch only fires when data is older than the staleTime,
+      // so in a case like this you definitely want to set one
+      staleTime: 60000,
+    })
+  }
+
+  return (
+    <button onMouseEnter={prefetch} onFocus={prefetch} onClick={...}>
+      Show Details
+    </button>
+  )
+}
+```
+
+# References
 
 - [Why React Query](https://ui.dev/why-react-query)
+- [Documentations](https://tanstack.com/query/latest)
