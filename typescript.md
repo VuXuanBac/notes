@@ -53,6 +53,15 @@ function printCoord(pt: { x: number; y: number, z?: number }) {
 printCoord({ x: 3, y: 7 });
 ```
 
+### Special Data Types
+
+Dưới đây là một số kiểu dữ liệu đặc biệt mà TS hỗ trợ:
+- `void`: Dùng cho returnType để chỉ một hàm không trả về giá trị.
+- `object`: Một kiểu khớp với mọi kiểu dữ liệu ngoài `string, number, bigint, boolean, symbol, null, undefined`. Chú ý: `object` khác với JS Plain object hay `Object`
+- `unknown`: Tương tự `any` nhưng không hỗ trợ bất kỳ thao tác nào.
+- `never`: Chỉ một trạng thái không thể xảy ra (ví dụ đã xét hết mọi trường hợp trong mệnh đề điều kiện hay một hàm luôn trả lỗi)
+- `Function`: Đại diện cho một hàm (có thể gọi và có các thuộc tính như `bind`, `call`, `apply`,...)
+
 ### Union Types
 
 **Khi cần biểu diễn một kiểu dữ liệu là hỗn hợp của nhiều loại** (biến có thể nhận giá trị thuộc một trong nhiều kiểu cho trước), ta sử dụng toán tử `|` nối giữa các kiểu dữ liệu. => **union type**
@@ -60,7 +69,13 @@ printCoord({ x: 3, y: 7 });
 Với **union type**, `tsc` sẽ báo lỗi nếu thực hiện một hành động mà một trong các kiểu dữ liệu không hỗ trợ. Ví dụ một `number | string` không thể gọi `toUpperCase()`
 - Khi đó, ta có thể sử dụng `typeof` (hoặc các cách khác như `Array.isArray()`) để làm hẹp kiểu dữ liệu mà TS ngầm định cho biến. => **type guard**
 
-**Type guard** có thể được triển khai dựa trên một số cách
+**Type guard** có thể được triển khai dựa trên một số cách:
+- Sử dụng `typeof` đối với `"string", "number", "bigint", "boolean", "symbol", "undefined", "object", "function"`
+- Sử dụng Truthiness để xác định cụ thể hơn một giá trị có phải `null` hay `undefined` không.
+- Sử dụng `switch..case..` và các so sánh bằng/khác (`===`, `!==`, `==`, `!=`)
+- Sử dụng toán tử `in` (kiểm tra một thuộc tính có thuộc một biến hay prototype của nó hay không)
+- Sử dụng toán tử `instanceof`
+- Sử dụng [**type predicates**](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates) - định nghĩa một hàm predicate (boolean) trả về dạng `parameterName is Type`. Khi đó mỗi khi gọi hàm đó để kiểm tra một biến thì `tsc` biết khi nào biến đó sẽ có kiểu dữ liệu nào.
 
 **Các giá trị hằng số thuộc `number`, `string` và `boolean` (`true`, `false`) có thể trở thành kiểu dữ liệu** => **literal types**. Điều đó, khi kết hợp với **union**, ta có thể tạo một kiểu enum đơn giản.
 
@@ -131,6 +146,88 @@ const data = {message: "hello world", alignment: "left"} as const;
 function liveDangerously(x?: number | null) {
   // No error
   console.log(x!.toFixed());
+}
+```
+
+### Function Annotating
+
+**Khi muốn annotating cho cả một function** (ví dụ một callback), ta sử dụng cú pháp `(parameterName: Type,...) => returnType`. Khi bỏ trống `Type` cho các tham số thì mặc định chúng là `any`.
+
+```tsx
+function greeter(fn: (a: string) => void) {
+  fn("Hello, World");
+}
+```
+
+#### Generic Functions
+
+Ta có thể định nghĩa **hàm dưới dạng tổng quát** (**generic functions**), ở đó chữ ký của hàm không phụ thuộc vào các kiểu cụ thể (thay vào đó hàm được định nghĩa để tương thích với nhiều kiểu khác nhau). Khi đó, `tsc` xác định chữ ký của hàm tùy thuộc vào lời gọi (khi truyền đối số cụ thể). Các kiểu dữ liệu mà hàm phụ thuộc sẽ được khai báo ngay sau tên hàm.
+
+- Ví dụ, hàm `map` ở đây có chữ ký phụ thuộc vào hai kiểu tổng quát đại diện bởi `Input` và `Output`. `Input` và `Output` thực sự đại diện cho kiểu dữ liệu nào chỉ được xác định tùy thuộc vào đối số truyền cho `map`.
+```tsx
+function map<Input, Output>(arr: Input[], func: (arg: Input) => Output): Output[] {
+  return arr.map(func);
+}
+ 
+// 'arr' is of type 'string[]' ==> Input is now 'string'
+// 'parseInt' returns a 'number' ==> Output is now 'number' ==> 'parsed' is now 'number[]'
+const parsed = map(["1", "2", "3"], (n) => parseInt(n));
+
+// 'arr' is of type 'any' ==> Input is now 'any'
+// 'Number.isInteger' returns a 'boolean' ==> Output is now 'boolean' ==> 'parsed' is now 'boolean[]'
+const parsed = map([1, "abc", false], (n) => Number.isInteger(n));
+```
+
+Khi muốn **giới hạn phạm vi cho các `Type`s** trong **generic functions**, ta sử dụng từ khóa `extends` khi khai báo kiểu phụ thuộc cho hàm. Sau `extends` là một object khai báo thuộc tính và kiểu dữ liệu mà `Type` cần hỗ trợ.
+
+```tsx
+// allow using any data type that support `length` property (that returns a number).
+function longest<Type extends { length: number }>(a: Type, b: Type) {
+  if (a.length >= b.length) {
+    return a;
+  } else {
+    return b;
+  }
+}
+ 
+// longerArray is of type 'number[]'
+const longerArray = longest([1, 2], [1, 2, 3]);
+// longerString is of type 'alice' | 'bob'
+const longerString = longest("alice", "bob");
+// Error! Numbers don't have a 'length' property
+const notOK = longest(10, 100);
+```
+
+Khi phân tích lời gọi hàm, TS sẽ tự động xác định kiểu dữ liệu cụ thể cho các kiểu phụ thuộc, tuy nhiên, việc "tự động" này có thể không đúng với ý muốn khi gọi hàm. Khi đó ta cần chỉ định rõ ràng khi gọi hàm.
+
+```tsx
+function combine<Type>(arr1: Type[], arr2: Type[]): Type[] {}
+
+// TS infer that `Type` is now `number`
+// ERROR: Type 'string' is not assignable to type 'number'.
+const arr = combine([1, 2, 3], ["hello"]);
+
+// Explicitly declare that `Type` is `string | number`
+const arr = combine<string | number>([1, 2, 3], ["hello"]);
+```
+
+#### Special Parameters and Arguments
+
+TS hỗ trợ **Rest Parameters** trong định nghĩa hàm, trong đó, kiểu dữ liệu của nó luôn phải ở dạng `Array<T>` hoặc `T[]`
+
+```tsx
+function multiply(n: number, ...m: number[]) {
+  return m.map((x) => n * x);
+}
+// 'a' gets value [10, 20, 30, 40]
+const a = multiply(10, 1, 2, 3, 4);
+```
+
+**Với Parameter Destructuring** (để unpack một object thành các biến cục bộ trong hàm), type annotation của nó là một object với key và kiểu dữ liệu (tương tự annotating cho các objects khác)
+
+```tsx
+function sum({ a, b, c }: { a: number; b: number; c: number }) {
+  console.log(a + b + c);
 }
 ```
 
