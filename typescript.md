@@ -20,7 +20,7 @@ Mã nguồn ứng dụng có thể chỉ thực hiện type annotating cho một
 
 **Ba kiểu dữ liệu cơ bản** trong JS được dùng lại trong TS là: `string`, `number` (bao gồm cả `int` và `float`, TS không tách biệt) và `boolean`.
 
-Khi chỉ định một mảng thuần nhất với ba kiểu trên, có thể sử dụng `string[]`, `number[]` và `boolean[]`.
+**Khi chỉ định một mảng thuần nhất** với ba kiểu trên, có thể sử dụng `string[]`, `number[]` và `boolean[]`.
 
 **Khi không muốn xác định kiểu**, có thể sử dụng `any`, từ đó có thể thực hiện các thao tác mà `tsc` sẽ không kiểm tra.
 
@@ -39,28 +39,6 @@ function add(n1: number, n2: number): number {
 ```
 
 **Với anonymous function và arrow function**, TS có thể ngầm định kiểu dựa trên bối cảnh thực thi của chúng (ví dụ một callback cho hàm `forEach` trên mảng các `string`) => **contextual typing**
-
-**Với objects**, type annotation cho chúng là một object của các thuộc tính và kiểu dữ liệu tương ứng của chúng, phân tách bởi dấu `,` hoặc `;`.
-
-**Khi thuộc tính của object có thể không được xác định**, có thể sử dụng `?` phía sau tên thuộc tính.
-
-```tsx
-function printCoord(pt: { x: number; y: number, z?: number }) {
-  console.log("The coordinate's x value is " + pt.x);
-  console.log("The coordinate's y value is " + pt.y);
-  console.log("The coordinate's z value is " + pt.z); // undefined if missing
-}
-printCoord({ x: 3, y: 7 });
-```
-
-### Special Data Types
-
-Dưới đây là một số kiểu dữ liệu đặc biệt mà TS hỗ trợ:
-- `void`: Dùng cho returnType để chỉ một hàm không trả về giá trị.
-- `object`: Một kiểu khớp với mọi kiểu dữ liệu ngoài `string, number, bigint, boolean, symbol, null, undefined`. Chú ý: `object` khác với JS Plain object hay `Object`
-- `unknown`: Tương tự `any` nhưng không hỗ trợ bất kỳ thao tác nào.
-- `never`: Chỉ một trạng thái không thể xảy ra (ví dụ đã xét hết mọi trường hợp trong mệnh đề điều kiện hay một hàm luôn trả lỗi)
-- `Function`: Đại diện cho một hàm (có thể gọi và có các thuộc tính như `bind`, `call`, `apply`,...)
 
 ### Union Types
 
@@ -83,7 +61,24 @@ Với **union type**, `tsc` sẽ báo lỗi nếu thực hiện một hành đ�
 function compareText(s1: string, s2: string, start: "left" | "right" | number): -1 | 0 | 1 {}
 ```
 
-### Type Aliases and Interfaces
+### Object
+
+**Với objects**, type annotation cho chúng là một object của các thuộc tính và kiểu dữ liệu tương ứng của chúng, phân tách bởi dấu `,` hoặc `;`.
+
+**Khi thuộc tính của object có thể không được xác định**, có thể sử dụng `?` phía sau tên thuộc tính.
+
+```tsx
+function printCoord(pt: { x: number; y: number, z?: number }) {
+  console.log("The coordinate's x value is " + pt.x);
+  console.log("The coordinate's y value is " + pt.y);
+  console.log("The coordinate's z value is " + pt.z); // undefined if missing
+}
+printCoord({ x: 3, y: 7 });
+```
+
+Xem thêm cú pháp tại phần [Interfaces](#interfaces)
+
+### Type Aliases
 
 **Khi một kiểu là phức tạp**, ta có thể sử dụng **type aliases** để gán tên cho kiểu đó, từ đó có thể dùng lại ở nhiều vị trí.
 
@@ -99,7 +94,9 @@ type ID = number | string;
 function updatePoint(id: ID, pt: Point) {}
 ```
 
-Một cú pháp khác có thể sử dụng là **interfaces**, với cú pháp hoàn toàn tương tự.
+### Interfaces
+
+Tương tự aliases, **interfaces** cũng dùng để khai báo một kiểu custom, dành cho object.
 
 ```tsx
 interface Point {
@@ -108,6 +105,100 @@ interface Point {
   z?: number
 };
 ```
+
+**Khi thuộc tính của object hỗ trợ indexing**, ta sử dụng cú pháp `[index: indexType]: valueType`, trong đó `indexType` chỉ có thể là `string`, `number`, `symbol`,template string và [**union type**](#union-types) của các kiểu trên.
+
+Chú ý: Do `obj.property` giống với `obj["property"]` nên `tsc` sẽ báo lỗi nếu có thuộc tính với kiểu dữ liệu không phải là `valueType`.
+
+```tsx
+interface NumberDictionary {
+  [index: string]: number;
+ 
+  length: number; // ok
+  name: string; // Property 'name' of type 'string' is not assignable to 'string' index type 'number'.
+}
+
+interface NumberOrStringDictionary {
+  [index: string]: number | string;
+  length: number; // ok, length is a number
+  name: string; // ok, name is a string
+}
+```
+
+**Khi thuộc tính của object không được gán lại**, ta thêm từ khóa `readonly` trước tên thuộc tính trong khai báo.
+
+**Ưu điểm của interfaces là nó cho phép kế thừa (hỗ trợ đa kế thừa)** với từ khóa `extends`
+
+```tsx
+interface Colorful {
+  color: string;
+}
+ 
+interface Circle {
+  radius: number;
+}
+ 
+interface ColorfulCircle extends Colorful, Circle {
+  isFill: boolean
+}
+```
+
+Một cách kế thừa tương tự là tạo giao giữa hai **interfaces** thông qua toán tử `&` => **intersection**
+
+```tsx
+type ColorfulCircle = Colorful & Circle;
+```
+
+Riêng với **intersection**, nếu có sự xung đột về kiểu với hai thuộc tính trùng tên ở hai **interfaces** thì kết quả giao sẽ là một thuộc tính với kiểu `never` (không thể có một thuộc tính mà đồng thời nhận hai kiểu dữ liệu).
+
+#### Generic Types
+
+Khi thuộc tính của một **interface** không phụ thuộc vào kiểu cụ thể, nếu như sử dụng `any` thì ta lại cần **type guards** mỗi khi thực hiện thao tác trên thuộc tính. Thay vào đó, có thể định nghĩa interface dưới dạng tổng quát với một kiểu giả định. Kiểu thực sự sẽ được tùy chỉnh khi cần annotate cho biến cụ thể.
+
+```tsx
+interface Box<Type> {
+  contents: Type;
+}
+ 
+let boxA: Box<string> = { contents: "hello" }; // Type is now 'string'
+let boxB: Box<number> = { contents: 123 }; // Type is now 'number'
+```
+
+Cú pháp này cũng có thể áp dụng cho **aliases**
+
+```tsx
+type Box<Type> = {
+  contents: Type;
+}
+```
+
+`Array` và phiên bản **readonly** `ReadonlyArray` cũng là các generic types
+
+### Tuples
+
+**Khi một mảng cố định về kích thước và kiểu dữ liệu của các phần tử**, ta có thể sử dụng cú pháp của **tuple**, với các tính năng sau:
+- Optional với `?` (chỉ với những phần tử ở cuối)
+- Readonly
+- Rest elements
+
+```tsx
+const [x, y, z, color]: [number, number, number, string] = [1, 0, 1, 'red'];
+
+// Optional z and color
+const [x, y, z, color]: [number, number, number?, string?] = [1, 0, 1]; // [x, y, z, color] = [1, 0, 1, undefined]
+
+// Rest elements
+type restAreBooleans = [string, ...boolean[], number]; // expect any value like [string, number], [string, boolean, number], [string, boolean, boolean, number]...
+```
+
+### Special Data Types
+
+Dưới đây là một số kiểu dữ liệu đặc biệt mà TS hỗ trợ:
+- `void`: Dùng cho returnType để chỉ một hàm không trả về giá trị.
+- `object`: Một kiểu khớp với mọi kiểu dữ liệu ngoài `string, number, bigint, boolean, symbol, null, undefined`. Chú ý: `object` khác với JS Plain object hay `Object`
+- `unknown`: Tương tự `any` nhưng không hỗ trợ bất kỳ thao tác nào.
+- `never`: Chỉ một trạng thái không thể xảy ra (ví dụ đã xét hết mọi trường hợp trong mệnh đề điều kiện hay một hàm luôn trả lỗi)
+- `Function`: Đại diện cho một hàm (có thể gọi và có các thuộc tính như `bind`, `call`, `apply`,...)
 
 ### Type Assertions
 
