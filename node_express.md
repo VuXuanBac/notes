@@ -20,17 +20,48 @@ NodeJS là sự kết hợp của **Chrome's V8 JS Engine**, **Event Loop** và 
 Trong mô hình truyền thống (như Apache, Ruby Puma), các web servers dành một luồng riêng để xử lý mỗi request. Còn NodeJS được xây dựng theo kiến trúc **đơn luồng hướng sự kiện**. Cả ứng dụng web chỉ chạy trên một tiến trình, ở đó:
 - Tất cả các requests được xử lý trên cùng một luồng (Single Thread)
 - Tất cả các thao tác vào ra sẽ được xử lý bất đồng bộ.
+
+Hướng thiết kế này được kế thừa từ đặc điểm của việc thực thi chương trình trên Browser: các Browser được thiết kế để thích ứng các tương tác của người dùng (ví dụ: `onClick`), NodeJS kế thừa và mở rộng điều đó với các chức năng tương tác với files, networks,...
+
 Ứng dụng NodeJS chỉ sử dụng một số ít luồng trong hệ thống, bao gồm:
 - Một luồng cho Event Loop - xử lý các yêu cầu **non-blocking I/O** cũng như các **callbacks** (khi hoàn thành). 
 - Mỗi luồng cho mỗi Workers - thực thi các công việc phức tạp hơn (sử dụng C++) như **blocking I/O**.
 
 ### Event Loop
 
-NodeJS sử dụng **Event Loop** để có thể xử lý các thao tác **non-blocking I/O**. 
-- Khi có yêu cầu vào ra, nó sẽ được gửi xuống System Kernel và trả quyền kiểm soát về ứng dụng.
-- Và khi hoàn thành, Kernel sẽ thông báo tới NodeJS để thêm một **callback** vào **Poll Queue** chờ thực thi.
+NodeJS coi các thao tác vào ra là nút thắt cổ chai chính (bottleneck) và **Event Loop** hỗ trợ để thực thi chúng ở chế độ bất đồng bộ (non-blocking).
 
-Tiền đề của NodeJS là coi các thao tác vào ra là nút thắt cổ chai (bottleneck) chính và **Event Loop** hỗ trợ để thực thi chúng ở chế độ bất đồng bộ (non-blocking)
-- Tuy nhiên, nếu một thao tác xử lý khác chiếm dụng CPU lớn thì nó cũng sẽ chặn dừng ứng dụng. Các callbacks cũng sẽ chỉ được thực thi khi ứng dụng xử lý xong phần việc cũ.
-- Lúc này, có thể xem xét đưa thao tác đó vào **Worker** để xử lý đa luồng.
-- Khi đó
+Event Loop trong NodeJS được triển khai nhờ thư viện [**libuv**](https://libuv.org/), một thư viện đa nền tảng viết bằng C, **nằm ngoài V8 Engine**. Thư viện này làm Event Loop trong NodeJS được triển khai khác với Event Loop trên Browsers.
+
+Trong NodeJS, V8 Engine sẽ đảm nhiệm thực thi chương trình JS, nó duy trì và quản lý Memory Heap (chứa dữ liệu) và Call Stack (chứa các lời gọi hàm). 
+- Các lời gọi hàm sẽ lần lượt được đẩy vào Call Stack để thực thi, và được đẩy ra khi hoàn thành.
+- Khi một lời gọi hàm cần xử lý bất đồng bộ, libuv sẽ đảm nhiệm việc thực thi nó, nó cũng sẽ bị đẩy ra khỏi Call Stack. libuv sẽ cố gắng tận dụng cơ chế bất đồng bộ mà OS hỗ trợ (ví dụ khi xử lý network requests), hoặc nếu không (như khi đọc file), nó sẽ tạo thread pool để không thực thi trên thread chính.
+- Khi xử lý bất đồng bộ hoàn thành, **callback** của lời gọi bất đồng bộ sẽ được đẩy vào Call Stack để thực thi.
+
+> *Nếu như khi lời gọi bất đồng bộ hoàn thành và các lời gọi đồng bộ vẫn chưa được thực thi xong, thời điểm nào NodeJS sẽ thực thi callbacks?*
+- Chỉ khi toàn bộ chương trình đã được thực thi thì Event Loop mới bắt đầu. VD trong đoạn code sau đây, mặc dù `setTimeout` chỉ cần 1s để hoàn thành nhưng callback của nó chỉ được thực thi sau 4s (khi đã chạy xong vòng lặp `while`)
+
+```js
+// set function to be called after 1 second
+setTimeout(function() {
+   console.log('Timeout ran at ' + new Date().toTimeString());
+}, 1000);
+
+// store the start time
+var start = new Date();
+console.log('Enter loop at: '+start.toTimeString());
+
+// run a loop for 4 seconds
+var i = 0;
+while(new Date().getTime() &lt; start.getTime() + 4000) {
+   i++;
+}
+console.log('Exit loop at: ' + new Date().toTimeString()
+            +'. Ran ' + i + ' iterations.');
+```
+
+Khi NodeJS bắt đầu, nó (1) khởi tạo Event Loop, (2) thực thi chương trình (script đầu vào) và (3) bắt đầu xử lý Event Loop, với các phases như sau:
+
+![event loop's phases](img/node_express/event-loop-phases.png)
+
+Mỗi pha trong Event Loop đều có một **callback queue** riêng, chúng quyết định thứ tự thực thi của callback (*xác định, khi nào thì callback được đẩy vào Call Stack?*).
