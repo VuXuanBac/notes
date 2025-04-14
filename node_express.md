@@ -227,6 +227,87 @@ Trung tâm của Event Loop là pha **Poll**, ở mỗi vòng lặp, khi tiến 
 
 Ở pha Polling, **khi Poll queue trống, NodeJS lựa chọn ưu tiên thực thi pha Check (nếu có callbacks) hơn là Polling**
 
+Ngoài các pha của event loop triển khai trong libuv, NodeJS cung cấp thêm hai cách thức để thực thi bất đồng bộ, đặc trưng riêng của NodeJS, đó là `process.nextTick()` và Promise API, chúng được gọi là **microtask** và cũng có callbacks queues riêng. Hai cách thức này có độ ưu tiên đặc biệt so với các pha của event loop, cụ thể:
+- Callbacks của **microtasks** luôn được gọi và hoàn thành trước khi thực thi tiếp một callback ở bất kỳ pha nào trong event loop
+- Callbacks trong `process.nextTick` luôn được ưu tiên xử lý trước, chỉ khi queue của nó trống mới chuyển sang thực thi callbacks của Promise (`.then`, `.catch`, `.finally`), và chỉ khi Promise queue trống mới thực thi tiếp event loop
+
+#### Một số ví dụ
+
+**Ví dụ về Promise API và `process.nextTick()`**
+
+```js
+Promise.resolve().then(() => console.log("Promise.resolve 1"));
+Promise.resolve().then(() => {
+  console.log("Promise.resolve 2");
+  process.nextTick(() =>
+    console.log("Promise.resolve 2 > process.nextTick")
+  );
+  Promise.resolve().then(() =>
+    console.log("Promise.resolve 2 > Promise.resolve")
+  );
+});
+Promise.resolve().then(() => console.log("Promise.resolve 3"));
+
+process.nextTick(() => console.log("process.nextTick 1"));
+process.nextTick(() => {
+  console.log("process.nextTick 2");
+  process.nextTick(() =>
+    console.log("process.nextTick 2 > process.nextTick")
+  );
+  Promise.resolve().then(() => console.log("process.nextTick 2 > Promise.resolve"));
+});
+process.nextTick(() => console.log("process.nextTick 3"));
+
+console.log("synchronous code");
+//===== Result =====
+// synchronous code
+// process.nextTick 1
+// process.nextTick 2
+// process.nextTick 3
+// process.nextTick 2 > process.nextTick   // <--- the last item in `nextTick` queue
+// Promise.resolve 1                     
+// Promise.resolve 2
+// Promise.resolve 3
+// process.nextTick 2 > Promise.resolve
+// Promise.resolve 2 > Promise.resolve     // <--- the last item in `Promise` queue --> switch to next loop
+// Promise.resolve 2 > process.nextTick
+```
+
+**Ví dụ sau là cách thức xử lý Timeout callbacks**:
+
+```js
+setTimeout(() => console.log("setTimeout 1"), 0);
+setTimeout(() => {
+  console.log("setTimeout 2");
+  process.nextTick(() => {
+    console.log("setTimeout 2 > process.nextTick");
+    Promise.resolve().then(() => {
+      console.log("setTimeout 2 > process.nextTick > Promise.resolve");
+      // assume this code takes longer than 10ms to finish
+      // so `setTimeout 3` has timeout while running this callback
+      for (let i = 0; i < 1000000000; i++) {}
+    });
+  });
+}, 0);
+setTimeout(() => console.log("setTimeout 3"), 10);
+setTimeout(() => console.log("setTimeout 4"), 0);
+
+process.nextTick(() => {
+  console.log("process.nextTick 1");
+  // assume this code takes longer than 10ms to finish
+  // so `setTimeout 3` has timeout while running this callback
+  for (let i = 0; i < 1000000000; i++) {}
+});
+
+//===== Result =====
+// process.nextTick 1                   <--- `nextTick` and Promise run before all timers
+// setTimeout 1
+// setTimeout 2
+// setTimeout 2 > process.nextTick      <--- `nextTick`s and Promises are called right after each Timer callback
+// setTimeout 2 > process.nextTick > Promise.resolve
+// setTimeout 4
+// setTimeout 3                         <--- run in next loop even if it is timeout while running previous loop
+```
 
 Tham khảo:
 - https://blog.logrocket.com/complete-guide-node-js-event-loop/
