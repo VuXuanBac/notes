@@ -270,12 +270,14 @@ console.log("synchronous code");
 // Promise.resolve 3
 // process.nextTick 2 > Promise.resolve
 // Promise.resolve 2 > Promise.resolve     // <--- the last item in `Promise` queue --> switch to next loop
-// Promise.resolve 2 > process.nextTick
+// Promise.resolve 2 > process.nextTick    // <--- runned in next loop
 ```
 
 **Ví dụ sau là cách thức xử lý Timeout callbacks**:
 
 ```js
+cost_more_100ms_to_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
+
 setTimeout(() => console.log("setTimeout 1"), 0);
 setTimeout(() => {
   console.log("setTimeout 2");
@@ -283,21 +285,22 @@ setTimeout(() => {
     console.log("setTimeout 2 > process.nextTick");
     Promise.resolve().then(() => {
       console.log("setTimeout 2 > process.nextTick > Promise.resolve");
-      // assume this code takes longer than 10ms to finish
-      // so `setTimeout 3` has timeout while running this callback
-      for (let i = 0; i < 1000000000; i++) {}
+      // assume this code takes longer than 100ms to finish
+      // so `setTimeout 3` timeout while running this callback
+      cost_more_100ms_to_finish();
+      // if this callback called before `setTimeout 3`, it means `setTimeout 3` is runned in next loop
+      setImmediate(() => console.log("setTimeout 2 > process.nextTick > setImmediate"));
     });
   });
 }, 0);
-setTimeout(() => console.log("setTimeout 3"), 10);
+setTimeout(() => console.log("setTimeout 3"), 100);
 setTimeout(() => console.log("setTimeout 4"), 0);
 
-process.nextTick(() => {
-  console.log("process.nextTick 1");
-  // assume this code takes longer than 10ms to finish
-  // so `setTimeout 3` has timeout while running this callback
-  for (let i = 0; i < 1000000000; i++) {}
-});
+process.nextTick(() => console.log("process.nextTick 1"));
+
+// ---- uncomment this to see the different
+// ---- this code make `setTimeout 3` timeout before entering event loop
+// cost_more_100ms_to_finish();
 
 //===== Result =====
 // process.nextTick 1                   <--- `nextTick` and Promise run before all timers
@@ -306,8 +309,66 @@ process.nextTick(() => {
 // setTimeout 2 > process.nextTick      <--- `nextTick`s and Promises are called right after each Timer callback
 // setTimeout 2 > process.nextTick > Promise.resolve
 // setTimeout 4
-// setTimeout 3                         <--- run in next loop even if it is timeout while running previous loop
+// setTimeout 2 > process.nextTick > setImmediate
+// setTimeout 3                         <--- run in next loop even if it is timeout while running Timer phase
 ```
+
+Ví dụ trên cho thấy 3 điều:
+- Callbacks của Microtasks được gọi trước Timers
+- Trong quá trình thực thi mỗi Timer callbacks đều gọi Microtasks callbacks, và chỉ khi chúng không còn callbacks mới thực thi tiếp callbacks của Timers
+- Chỉ ở đầu vòng lặp thì các Timers mới được xem xét có timeouts hay không, nếu timeout ở giữa vòng lặp, hay kể cả ở pha Timer (như `setTimeout 3`) thì cũng phải đợi vòng lặp tiếp theo
+- Timer Queue triển khai cơ chế sắp xếp callbacks theo thời gian chờ, kể cả khi 4 Timers trên đều timeout trước khi bắt đầu event loop thì `setTimeout 3` vẫn được gọi sau `setTimeout 4`
+
+**Ví dụ tiếp theo là kinh điển cho setTimeout 0**
+
+```js
+setTimeout(() => console.log("setTimeout"), 0);
+setImmediate(() => console.log("setImmediate"));
+
+//===== Result 1 =====
+// setTimeout
+// setImmediate
+
+//===== Result 2 =====
+// setImmediate
+// setTimeout
+
+
+const fs = require("fs");
+fs.readFile(__filename, () => {
+  setTimeout(() => console.log("setTimeout"), 0);
+  setImmediate(() => console.log("setImmediate"));
+});
+//===== Result =====
+// setImmediate
+// setTimeout
+```
+
+Lý do kết quả thực thi không xác định là vì timeout cho Timers không bao giờ là 0 tuyệt đối, NodeJS luôn thiết lập tối thiểu cho nó là 1ms. Do đó kết quả trả ra phụ thuộc vào việc chương trình kiểm tra **Timer** queue tại thời điểm nào: nếu sau 1ms thì trả về Result 1, và ngược lại.
+
+Tuy nhiên, nếu đặt chúng vào một IO callbacks thì callback của `setImmediate` luôn được thực thi trước.
+
+**Ví dụ tiếp theo làm rõ hơn về pha Polling**
+
+```js
+const fs = require("fs");
+make_io_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
+
+setTimeout(() => console.log("setTimeout"), 1000);
+fs.readFile(__filename, () => console.log("I/O"));
+setImmediate(() => console.log("setImmediate"));
+
+make_io_finish(); // <--- entering event loop when I/O finishes
+
+//===== Result =====
+// setImmediate
+// I/O
+// setTimeout
+```
+
+Kết quả cho thấy
+- Khi chương trình tiến vào pha **Poll** mà **Check** queue đang có callback thì NodeJS sẽ không đợi mà thực hiện Polling với timeout bằng 0 (kể cả có Timer hay không)
+- Khi Polling xong, NodeJS chỉ thêm IO callback vào **Poll** queue mà không thực thi, chuyển ngay đến pha **Check**.
 
 Tham khảo:
 - https://blog.logrocket.com/complete-guide-node-js-event-loop/
