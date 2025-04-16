@@ -24,8 +24,8 @@ Trong mô hình truyền thống (như Apache, Ruby Puma), các web servers dàn
 Hướng thiết kế này được kế thừa từ đặc điểm của việc thực thi chương trình trên Browser: các Browser được thiết kế để thích ứng các tương tác của người dùng (ví dụ: `onClick`), NodeJS kế thừa và mở rộng điều đó với các chức năng tương tác với files, networks,...
 
 Ứng dụng NodeJS chỉ sử dụng một số ít luồng trong hệ thống, bao gồm:
-- Một luồng cho Event Loop - xử lý các yêu cầu **non-blocking I/O** cũng như các **callbacks** (khi hoàn thành). 
-- Mỗi luồng cho mỗi Workers - thực thi các công việc phức tạp hơn (sử dụng C++) như **blocking I/O**.
+- Một luồng cho Event Loop - xử lý các yêu cầu **non-blocking I/O**.
+- Mỗi luồng cho mỗi Worker - thực thi các công việc phức tạp hơn (sử dụng C++) như **blocking I/O**.
 
 ### Event Loop
 
@@ -228,8 +228,10 @@ Trung tâm của Event Loop là pha **Poll**, ở mỗi vòng lặp, khi tiến 
 Ở pha Polling, **khi Poll queue trống, NodeJS lựa chọn ưu tiên thực thi pha Check (nếu có callbacks) hơn là Polling**
 
 Ngoài các pha của event loop triển khai trong libuv, NodeJS cung cấp thêm hai cách thức để thực thi bất đồng bộ, đặc trưng riêng của NodeJS, đó là `process.nextTick()` và Promise API, chúng được gọi là **microtask** và cũng có callbacks queues riêng. Hai cách thức này có độ ưu tiên đặc biệt so với các pha của event loop, cụ thể:
-- Callbacks của **microtasks** luôn được gọi và hoàn thành trước khi thực thi tiếp một callback ở bất kỳ pha nào trong event loop
-- Callbacks trong `process.nextTick` luôn được ưu tiên xử lý trước, chỉ khi queue của nó trống mới chuyển sang thực thi callbacks của Promise (`.then`, `.catch`, `.finally`), và chỉ khi Promise queue trống mới thực thi tiếp event loop
+- Callbacks của **microtasks** luôn được gọi và hoàn thành:
+  - Ngay sau khi thực thi đồng bộ và ngay trước khi tiến vào event loop.
+  - Trước khi thực thi tiếp một callback ở bất kỳ pha nào trong event loop
+- Callbacks trong `process.nextTick` luôn được ưu tiên xử lý trước, chỉ khi queue của nó trống mới chuyển sang thực thi callbacks của Promise (`.then`, `.catch`, `.finally`), và chỉ khi Promise queue trống mới thực thi tiếp event loop.
 
 #### Một số ví dụ
 
@@ -276,7 +278,7 @@ console.log("synchronous code");
 **Ví dụ sau là cách thức xử lý Timeout callbacks**:
 
 ```js
-cost_more_100ms_to_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
+const cost_more_100ms_to_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
 
 setTimeout(() => console.log("setTimeout 1"), 0);
 setTimeout(() => {
@@ -352,7 +354,7 @@ Tuy nhiên, nếu đặt chúng vào một IO callbacks thì callback của `set
 
 ```js
 const fs = require("fs");
-make_io_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
+const make_io_finish = () => {for (let i = 0; i < 1000000000; i++) {}};
 
 setTimeout(() => console.log("setTimeout"), 1000);
 fs.readFile(__filename, () => console.log("I/O"));
@@ -370,7 +372,49 @@ Kết quả cho thấy
 - Khi chương trình tiến vào pha **Poll** mà **Check** queue đang có callback thì NodeJS sẽ không đợi mà thực hiện Polling với timeout bằng 0 (kể cả có Timer hay không)
 - Khi Polling xong, NodeJS chỉ thêm IO callback vào **Poll** queue mà không thực thi, chuyển ngay đến pha **Check**.
 
-Tham khảo:
+**Ví dụ cuối cùng bao gồm tất cả các lời gọi bất đồng bộ**
+
+```js
+const fs = require("fs");
+
+const make_async_finish = () => {for (let i = 0; i < 2000000000; i++) {}};
+const readableStream = fs.createReadStream(__filename);
+readableStream.close();
+
+readableStream.on("close", () => {
+  console.log("close");
+  Promise.resolve().then(() => console.log("close > Promise.resolve"));
+});
+fs.readFile(__filename, () => {
+  console.log("I/O");
+  process.nextTick(() => console.log("I/O > process.nextTick"));
+});
+setImmediate(() => {
+  console.log("setImmediate");
+  process.nextTick(() => console.log("setImmediate > process.nextTick"));
+});
+setTimeout(() => {
+  console.log("setTimeout");
+  Promise.resolve().then(() => console.log("setTimeout > Promise.resolve"));
+}, 0);
+process.nextTick(() => console.log("process.nextTick"));
+
+make_async_finish(); // <-- entering event loop with all async calls finish
+
+//===== Result =====
+// process.nextTick
+// setTimeout
+// setTimeout > Promise.resolve
+// setImmediate                     // <-- No wait on Poll
+// setImmediate > process.nextTick
+// close
+// close > Promise.resolve
+// I/O                              // <-- Run in next loop
+// I/O > process.nextTick
+```
+
+#### Tham khảo
+
 - https://blog.logrocket.com/complete-guide-node-js-event-loop/
 - https://www.builder.io/blog/visualizing-nodejs-close-queue
 - https://medium.com/preezma/node-js-event-loop-architecture-go-deeper-node-core-c96b4cec7aa4
@@ -378,3 +422,34 @@ Tham khảo:
 - https://www.linuxtoday.com/blog/blocking-and-non-blocking-i-0/
 - https://www.remlab.net/op/nonblock.shtml
 - https://tuhuynh.com/posts/nio-under-the-hood/
+
+### Worker
+
+**libuv** có triển khai sẵn một thread pool để xử lý bất đồng bộ cho file I/O, `getaddrinfo` và `getnameinfo`. Khi các tác vụ này hoàn thành trên thread pool, event loop thread cũng sẽ được thông báo.
+
+> - Số lượng threads được khởi tạo sẵn trong pool là **4**. Ta có thể tăng lên bằng việc xác định giá trị cho biến môi trường **`UV_THREADPOOL_SIZE`** (tối đa 1024).
+> - Tất cả các threads trong pool sẽ được khởi tạo và cấp phát ngay tại thời điểm có một lời gọi bất kỳ sử dụng thread pool
+> - Điều này có thể làm tăng kích thước tiến trình (nhưng khá nhỏ, ~1MB/128 threads), nhưng sẽ giúp tăng hiệu năng thực thi
+> - Thread pool được dùng chung cho mọi event loops
+> - *Thread pool cũng được triển khai như một queue*
+
+Ngoài ra, **libuv** cũng cung cấp hàm `uv_queue_work` để cho phép thực thi một callback trên một thread trong pool. Từ đó, người dùng có thể dùng thread pool để xử lý các tác vụ nặng, đòi hỏi tính toán CPU lớn.
+
+NodeJS tận dụng thread pool của **libuv** và sử dụng nó cho (bên cạnh cho `fs` và `dns`) các hàm bất đồng bộ thuộc **crypto** và **zlib**
+
+### Những tác vụ ảnh hưởng hiệu năng và Best Practices
+
+V8 Engine có thể thực thi nhanh chóng cho nhiều tác vụ phổ biến, ngoại trừ các thao tác với REGEX và JSON.
+
+Về REGEX, độ phức tạp thực thi của đa số pattern là `O(N)` (với `N` là kích thước chuỗi đầu vào). Tuy nhiên, một số Regex Compiler có thể xử lý rất chậm đối với một số dạng patterns (tùy thuộc vào bộ triển khai là Perl, Python, Ruby, Java,...), thậm chí có thể bị lợi dụng để triển khai [REDOS](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS). Dưới đây là một số best practices khi dùng REGEX:
+- Tránh nested quantifiers, ví dụ `(a+)*` (và input kiểu như `aaaa....aaab` - 100 ký tự `a`)
+- Tránh overlapping `OR`, ví dụ `(a|a)*`
+- Tránh backreference, ví dụ `(a.*) \1`
+- Nếu có thể, hãy cân nhắc sử dụng `indexOf` (hoặc các methods tương tự), vì chúng có độ phức tạp chỉ `O(N)`
+
+Dưới đây là một số tool: 
+- [safe-regex - Đánh giá rủi ro](https://github.com/davisjam/safe-regex)
+- [rxxr2 - Đánh giá rủi ro](https://github.com/superhuman/rxxr2)
+- [regexlib - Bộ thư viện các patterns](https://www.regexlib.com/)
+
+Về JSON, `JSON.parse` và `JSON.stringify` cũng là các tác vụ rủi ro khi thời gian thực thi tăng đáng kể theo kích thước đầu vào. Có thể cân nhắc sử dụng các methods bất đồng bộ khi tương tác với JSON với các modules: [JSONStream](https://www.npmjs.com/package/JSONStream)
