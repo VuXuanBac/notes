@@ -453,3 +453,97 @@ Dưới đây là một số tool:
 - [regexlib - Bộ thư viện các patterns](https://www.regexlib.com/)
 
 Về JSON, `JSON.parse` và `JSON.stringify` cũng là các tác vụ rủi ro khi thời gian thực thi tăng đáng kể theo kích thước đầu vào. Có thể cân nhắc sử dụng các methods bất đồng bộ khi tương tác với JSON với các modules: [JSONStream](https://www.npmjs.com/package/JSONStream)
+
+Xem thêm: [Các kỹ thuật không chặn Event Loop](https://nodejs.org/en/learn/asynchronous-work/dont-block-the-event-loop)
+
+## Modules và Package Managers
+
+Module là một đơn vị tổ chức mã nguồn có thể dùng lại. Mỗi tệp mã nguồn JS đều được coi là một module. Một module có thể cung cấp tính năng cho các modules khác sử dụng.
+
+Trong một module, bên cạnh các tính năng mà nó triển khai, ta quan tâm đến hai thao tác:
+- **import**: module hiện tại sử dụng các tính năng/dữ liệu nào và từ modules nào
+- **export**: các tính năng/dữ liệu mà modules này cho phép các modules khác sử dụng (khi import) là gì.
+
+Mặc định, các biến cục bộ bên trong modules mà không được export thì đều không thể truy cập từ bên ngoài.
+
+NodeJS cung cấp sẵn một số modules sau đây:
+- `http`, `https`: triển khai tính năng của một HTTP/HTTPS server
+- `url`: phân giải `URL` và `URLSearchParams`
+- `querystring`: phân giải query string trên URL
+- `path`: xử lý đường dẫn tệp
+- `fs`: vào ra trên hệ thống tệp
+- `crypto`: các hàm mật mã
+- `zlib`: nén và giải nén
+- ....
+
+NodeJS hỗ trợ hai định dạng để tổ chức modules: **CommonJS** (CJS) và **ECMAScript** (ES)
+
+||CommonJS|ECMAScript|
+|--|--|--|
+|import|`require()`|`import`|
+|export|`module.exports`|`export`|
+
+### CommonJS
+
+Đây là định dạng mặc định mà NodeJS sử dụng. Nó là giải pháp thuở ban đầu mà NodeJS sử dụng cho việc quản lý modules trong môi trường không phải Browser.
+
+Về import, CommonJS sử dụng cơ chế đồng bộ, sử dụng `require()`, tức là chỉ có thể nạp các modules mà bên trong nó không sử dụng await ở mức module. Module chỉ được nạp một lần và được cache lại.
+
+Việc sử dụng `require()` cho phép nạp động, việc nạp chỉ được thực hiện khi thực thi chương trình, điều này cũng có thể coi là một hạn chế khi mà không thể tận dụng các cơ chế phân tích mã nguồn tĩnh.
+
+Về export, dữ liệu có thể export ra bên ngoài cần phải gán cho `module.exports`.
+
+```js
+// ============ math.js ============
+function add(a, b) {
+    return a + b;
+}
+
+function subtract(a, b) {
+    return a - b;
+}
+
+module.exports = { add, subtract };
+
+// ============ index.js ============
+const { add, subtract } = require('./math'); // no need extension here
+
+console.log(add(5, 3));
+console.log(subtract(5, 3));
+```
+
+### ECMAScript
+
+Khi ECMAScript module system được chuẩn hóa, NodeJS (hỗ trợ chính thức từ v13.2.0) triển khai định dạng này.
+
+Về import, ES hỗ trợ cả cơ chế nạp đồng bộ và bất đồng bộ. 
+
+```js
+// ============ math.js ============
+// which is called asynchronous load.
+export const five = await Promise.resolve(5);
+
+export function add(a, b) {
+    return a + b;
+}
+
+function subtract(a, b) {
+    return a - b;
+}
+
+function multiply(a, b) {
+    return a * b;
+}
+const PI = 3.14;
+
+export { subtract, multiply as mul }; 
+export default PI;
+
+// ============ index.js ============
+import PI, { add, subtract, mul as multiply } from './math.js'; // file extension is required
+
+console.log(PI);
+console.log(add(2, 4));
+console.log(subtract(2, 4));
+console.log(multiply(2, 4));
+```
