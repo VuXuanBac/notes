@@ -656,7 +656,7 @@ Một số options cho lệnh `npm install`
 - `--no-save`: Tải package nhưng không tạo entry.
 - `-g`: Tải package vào máy cục bộ, có thể dùng lại ở mọi projects
 
-Ngoài việc thêm entry cho `package.json`, NPM cũng thực hiện cập nhật `package-lock.json`. File này phản ánh chính xác phiên bản của các dependencies (và các dependencies con của chúng) mà project đang sử dụng. Điều này giúp tránh những khác biệt khi tải các dependencies trực tiếp từ `package.json` (khi mà phiên bản có thể tùy chọn trong một dải giá trị)
+Ngoài việc thêm entry cho `package.json`, NPM cũng thực hiện cập nhật `package-lock.json` (npm v5). File này phản ánh chính xác phiên bản của các dependencies (và các dependencies con của chúng) mà project đang sử dụng. Điều này giúp tránh những khác biệt khi tải các dependencies trực tiếp từ `package.json` (khi mà phiên bản có thể tùy chọn trong một dải giá trị)
 
 #### Versioning
 
@@ -739,6 +739,36 @@ npm install -g yarn
 npm install -g pnpm
 ```
 
+Dưới đây là cheetsheet CLI và một số đặc điểm giữa các package managers này. **Chú ý là chúng đều có thể truy cập vào NPM registry**
+
+| **Task**                             | **npm**                            | **Yarn**                         | **pnpm**                         |
+|-------------------------------------|------------------------------------|----------------------------------|----------------------------------|
+| 📌 Lockfile name                    | `package-lock.json`                | `yarn.lock`                      | `pnpm-lock.yaml`                 |
+| 🔧 Init project                     | `npm init`                         | `yarn init`                      | `pnpm init`                      |
+| 📥 Install all deps                 | `npm install`                      | `yarn`                           | `pnpm install`                   |
+| 📦 Install a package                | `npm install <pkg> [-g] [--save-dev]`                | `yarn [global] add <pkg> [--dev]`                 | `pnpm add <pkg> [--save-dev]`                 |
+| 🗑️ Remove a package                | `npm uninstall <pkg>`              | `yarn remove <pkg>`              | `pnpm remove <pkg>`              |
+| 🧹 Prune unused packages            | `npm prune`                                  | *(Handled automatically)*                   | `pnpm prune`                                 |
+| 📜 List installed packages          | `npm list`                         | `yarn list`                      | `pnpm list`                      |
+| 🚀 Run a script (from package.json) | `npm run <script>`                 | `yarn <script>`                  | `pnpm run <script>`              |
+| 🧼 Clean install (reset deps)       | `rm -rf node_modules && npm i`     | `yarn install --force`           | `pnpm install --force`           |
+| 📝 Update a package                 | `npm update <pkg>`                 | `yarn upgrade <pkg>`             | `pnpm update <pkg>`              |
+| 🐛 Audit dependencies (check security vulnerabilities)               | `npm audit`                        | `yarn audit`                     | `pnpm audit`                     |
+| 🌍 Run package without install      | `npx <pkg>`                        | `yarn dlx <pkg>`                 | `pnpm dlx <pkg>`                 |
+| 📦 Link from local folder        | `npm link ../local-folder`                 | `yarn link ../local-folder`              | `pnpm link ../local-folder`                    |
+
+#### YARN
+
+YARN ban đầu được giới thiệu như một giải pháp thay thế cho một số vấn đề của NPM, như không có lock file. Tuy nhiên, NPM ngày càng được cải thiện, giúp thu hẹp khoảng cách giữa YARN và NPM.
+
+Tuy nhiên, vẫn có một số tính năng riêng của YARN
+- `yarn why`: Giải thích tại sao package được tải
+- `yarn upgrade-interactive`: Lựa chọn package nào muốn update
+
+YARN cũng triển khai một **global cache** để lưu các dependencies của tất cả projects và chỉ tạo links từ global cache vào *node_modules*
+
+#### PNPM
+
 Khác với NPM sẽ tải dependencies trực tiếp vào *node_modules*, PNPM sẽ tải chúng vào một kho lưu trữ chung (*single content-addressable storage* - `pnpm store path`) và chỉ thực hiện tạo hard link trong *node_modules*. Từ đó nhiều projects có cùng dependencies thì chỉ cần lưu trữ và tải một lần.
 
-Đặc điểm thứ hai là NPM lưu trữ dependencies theo cấu trúc **flat**, tức là tất cả các dependencies, bất kể nó ở mức bao nhiêu thì cũng sẽ được lưu cùng cấp với nhau. Điều này sẽ khiến cho thư mục *node_modules* chứa rất nhiều thư mục con, trong khi ứng dụng chỉ phụ thuộc vào số ít packages. PNPM thì lại tổ chức theo cấu trúc **non-flat**, lợi dụng đặc điểm của kho lưu trữ chung, PNPM chỉ cần sử dụng hard-link để tham chiếu
+Đặc điểm thứ hai là NPM lưu trữ dependencies theo cấu trúc **flat**, tức là tất cả các dependencies, bất kể nó ở mức bao nhiêu thì cũng sẽ được lưu cùng cấp với nhau. Điều này sẽ khiến cho thư mục *node_modules* chứa rất nhiều thư mục con, trong khi ứng dụng chỉ phụ thuộc vào số ít packages. PNPM thì lại tổ chức theo cấu trúc **non-flat**, lợi dụng đặc điểm của kho lưu trữ chung, PNPM chỉ cần sử dụng hard-link để tham chiếu.
