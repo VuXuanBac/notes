@@ -458,6 +458,8 @@ Xem thêm: [Các kỹ thuật không chặn Event Loop](https://nodejs.org/en/le
 
 ## Modules và Package Managers
 
+### Modules
+
 Module là một đơn vị tổ chức mã nguồn có thể dùng lại. Mỗi tệp mã nguồn JS đều được coi là một module. Một module có thể cung cấp tính năng cho các modules khác sử dụng.
 
 Trong một module, bên cạnh các tính năng mà nó triển khai, ta quan tâm đến hai thao tác:
@@ -476,20 +478,22 @@ NodeJS cung cấp sẵn một số modules sau đây:
 - `zlib`: nén và giải nén
 - ....
 
-NodeJS hỗ trợ hai định dạng để tổ chức modules: **CommonJS** (CJS) và **ECMAScript** (ES)
+NodeJS hỗ trợ hai định dạng để tổ chức modules, cho phép nó có thể phân giải vị trí của modules và nạp chúng: **CommonJS** (CJS) và **ECMAScript** (ES)
 
 ||CommonJS|ECMAScript|
 |--|--|--|
 |import|`require()`|`import`|
 |export|`module.exports`|`export`|
+|extension mặc định|`.cjs`|`.mjs`|
+|package.json `type`|`commonjs`|`module`|
 
-### CommonJS
+Mặc định các project NodeJS sẽ sử dụng CommonJS, ta có thể chuyển sang sử dụng ECMAScript bằng việc chỉ định `type: "module"` bên trong `package.json` của project.
 
-Đây là định dạng mặc định mà NodeJS sử dụng. Nó là giải pháp thuở ban đầu mà NodeJS sử dụng cho việc quản lý modules trong môi trường không phải Browser.
+#### CommonJS (CJS)
+
+Đây là định dạng mặc định mà NodeJS sử dụng. Nó là giải pháp thuở ban đầu mà NodeJS sử dụng cho việc quản lý modules trong môi trường không phải Browser. Do đó, có nhiều thư viện NodeJS triển khai theo định dạng này.
 
 Về import, CommonJS sử dụng cơ chế đồng bộ, sử dụng `require()`, tức là chỉ có thể nạp các modules mà bên trong nó không sử dụng await ở mức module. Module chỉ được nạp một lần và được cache lại.
-
-Việc sử dụng `require()` cho phép nạp động, việc nạp chỉ được thực hiện khi thực thi chương trình, điều này cũng có thể coi là một hạn chế khi mà không thể tận dụng các cơ chế phân tích mã nguồn tĩnh.
 
 Về export, dữ liệu có thể export ra bên ngoài cần phải gán cho `module.exports`.
 
@@ -505,6 +509,10 @@ function subtract(a, b) {
 
 module.exports = { add, subtract };
 
+module.exports.multiply = function multiply(a, b) {
+  return a * b;
+}
+
 // ============ index.js ============
 const { add, subtract } = require('./math'); // no need extension here
 
@@ -512,11 +520,21 @@ console.log(add(5, 3));
 console.log(subtract(5, 3));
 ```
 
-### ECMAScript
+CJS module loader cho phép xác định module mà không chỉ định extension cho tệp, nó cũng hỗ trợ nạp một package như một module.
 
-Khi ECMAScript module system được chuẩn hóa, NodeJS (hỗ trợ chính thức từ v13.2.0) triển khai định dạng này.
+Việc sử dụng `require()` cho phép nạp động, việc nạp chỉ được thực hiện khi thực thi chương trình, điều này cũng có thể coi là một hạn chế khi mà không thể tận dụng các cơ chế phân tích mã nguồn tĩnh.
 
-Về import, ES hỗ trợ cả cơ chế nạp đồng bộ và bất đồng bộ. 
+Ngoài ra, với CommonJS, trong phạm vi module, ta có thể sử dụng hai biến sau:
+- `__filename`: Đường dẫn tuyệt đối tới module hiện tại
+- `__dirname`: Đường dẫn tuyệt đối tới thư mục làm việc chứa module hiện tại
+
+#### ECMAScript (ES)
+
+Khi ECMAScript module system được chuẩn hóa, NodeJS (hỗ trợ chính thức từ v13.2.0) triển khai định dạng này. Sử dụng ES module có thể đồng bộ với các UI framework như React/Vue.
+
+Về import và export, ES hỗ trợ cả cơ chế nạp đồng bộ và bất đồng bộ, có thể sử dụng cú pháp dưới dạng statement.
+
+Bên cạnh cú pháp dạng statement, ta có thể sử dụng hàm `import()` để có thể nạp động một module, tương tự `require()`
 
 ```js
 // ============ math.js ============
@@ -547,3 +565,180 @@ console.log(add(2, 4));
 console.log(subtract(2, 4));
 console.log(multiply(2, 4));
 ```
+
+ES module loader yêu cầu xác định chính xác vị trí của module (cần xác định cả extension nếu là file). Ngoài ra, JSON file cũng có thể được nạp như một module.
+
+ES không cung cấp sẵn `__filename` và `__dirname` như CJS, phiên bản tương tự của nó là:
+
+```js
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+```
+
+### Packages
+
+Package là một module đặc biệt, là một cây thư mục được mô tả bởi tệp `package.json`.
+
+Dưới đây là một số trường trong `package.json` mà NodeJS xử lý. [Xem thêm](https://nodejs.org/docs/latest/api/packages.html#nodejs-packagejson-field-definitions)
+
+|Trường|Mô tả|
+|--|--|
+|`name`|Định danh cho package, dùng khi import|
+|`main`|Module mặc định sẽ được import khi import package|
+|`type`|Xác định module loader (CJS hay ES) sẽ sử dụng khi nạp các module có extension `.js`|
+|`exports`|Cho phép tạo alias tới các modules trong package, được sử dụng khi module bên ngoài import module bên trong|
+|`imports`|Tạo alias tương tự `exports` nhưng chỉ phục vụ nội bộ (phân giải lệnh import ở các modules bên trong). Alias luôn phải bắt đầu bằng `#`|
+
+```js
+// ============ Project files structure ============
+my-awesome-lib/
+├── package.json
+├── dist/
+│   ├── index.js           # Compiled main entry point (exported via `main` and `exports`)
+│   └── cli.js             # Compiled CLI tool (exported via `exports["./cli"]`)
+├── src/
+│   ├── index.js           # Original source for main library
+│   ├── cli.js             # Original source for CLI
+│   ├── utils/
+│   │   └── index.js       # Utility functions (imported via `#utils`)
+│   └── config/
+│       ├── db.js          # DB config (imported via `#config/db.js`)
+│       └── env.js         # Env config (imported via `#config/env.js`)
+├── README.md
+└── node_modules/
+
+// ============ package.json ============
+{
+  "name": "my-awesome-lib",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./cli": "./dist/cli.js"
+  },
+  "imports": {
+    "#utils": "./src/utils/index.js",
+    "#config/*": "./src/config/*.js"
+  }
+}
+
+// ============ src/index.js of this project ============
+import utils from '#utils';
+import dbConfig from '#config/db.js';
+
+// ============ index.js of another project ============
+import lib from 'my-awesome-lib';       // resolves to dist/index.js
+import cli from 'my-awesome-lib/cli';   // resolves to dist/cli.js
+```
+
+### NPM
+
+NPM là bộ quản lý packages mặc định của NodeJS, cho phép tải, cập nhật và xóa các packages mà ứng dụng cần sử dụng (chúng được gọi là **dependencies** của ứng dụng). Các packages được chia sẻ có thể tìm kiếm trên địa chỉ https://www.npmjs.com/.
+
+NPM cung cấp một CLI để tương tác với registry của nó. Dưới đây là một số lệnh:
+
+|Lệnh|Mục đích|
+|--|--|
+|`npm init`|Khởi tạo một package (tạo `package.json`) tại thư mục hiện tại với các thông tin được người dùng cung cấp (interactive)|
+|`npm install [@scope/]<package-name>[@version]`|Tìm trong `@scope` và tải `<package-name>` (cùng toàn bộ dependencies của nó) với `@version`|
+|`npm update [@scope/]<package-name>[@version]`|Cập nhật package tới phiên bản xác định, hoặc mới nhất nếu không chỉ định|
+|`npm uninstall [@scope/]<package-name>[@version]`|Xóa package và dependencies của nó, cũng như các entry trong `package.json`|
+
+Khi tải một package, NPM sẽ đặt nó (cùng toàn bộ các **dependencies** của nó) vào thư mục **node_modules** cùng cấp với thư mục project. Đồng thời, một entry sẽ được thêm vào trường **`dependencies`** trong `package.json` (mặc định từ npm v5)
+
+Việc thêm package vào `dependencies` giúp có thể chia sẻ project mà không cần chia sẻ mã nguồn của các packages đó.
+
+Một số options cho lệnh `npm install`
+- `--save-dev` hoặc `-D`: Tải package và tạo entry cho trường **`devDependencies`**. Phù hợp với các packages phục vụ cho việc phát triển và kiểm thử ứng dụng mà không cần khi triển khai ứng dụng thực tế.
+- `--no-save`: Tải package nhưng không tạo entry.
+- `-g`: Tải package vào máy cục bộ, có thể dùng lại ở mọi projects
+
+Ngoài việc thêm entry cho `package.json`, NPM cũng thực hiện cập nhật `package-lock.json`. File này phản ánh chính xác phiên bản của các dependencies (và các dependencies con của chúng) mà project đang sử dụng. Điều này giúp tránh những khác biệt khi tải các dependencies trực tiếp từ `package.json` (khi mà phiên bản có thể tùy chọn trong một dải giá trị)
+
+#### Versioning
+
+NPM cho phép sử dụng **semantic versioning** ([semver](https://github.com/npm/node-semver#versions)) để xác định phiên bản cho các packages. Ví dụ:
+
+|Cú pháp|Hợp lệ|Không|Ý nghĩa|
+|--|--|--|--|
+|`>=1.2.7`|`1.2.8`, `2.5.3`|`1.2.6`||
+|`>1.2`|`1.3.0`, `2.0.0`|`1.2.1`||
+|`1.2.7 \|\| >=1.2.9 <2.0.0`|`1.2.7`, `1.4.6`|`1.2.8`, `2.0.0`||
+|`1.2 - 2.3.4`|`>=1.2.0 <=2.3.4`||Range|
+|`~1.2`|`1.2.x`||Chỉ chấp nhận thay đổi *patch*|
+|`~1`|`1.x.x`||Chỉ chấp nhận thay đổi *minor*|
+|`^1.2.3`|`>=1.2.3 <2.0.0`||Không vượt quá *major*|
+|`^0.2.3`|`>=0.2.3 <0.3.0`||Không vượt quá *minor*|
+|`^0.0.3`|`>=0.0.3 <0.0.4`||Không vượt quá *patch*|
+
+#### Tasks
+
+Bên cạnh việc quản lý các packages, NPM cũng hỗ trợ thực thi các commands tương tự như chạy CLI trên OS.
+
+Các commands này được gọi là các **tasks**, chúng được gán một định danh thông qua trường `scripts` trong `package.json`. Và với định danh này, ta có thể thực thi task thông qua lệnh `npm run <task-name>`
+- *Riêng một số task có tên đặc biệt là `start`, `stop`, `restart` và `test` có thể chạy trực tiếp dưới dạng `npm <task-name>`*
+- **Khi NPM chạy task `XYZ` bất kỳ, nó sẽ chạy đồng thời 3 tasks (nếu được định nghĩa) theo thứ tự là `preXYZ`, `XYZ` và `postXYZ`**
+
+```json
+{
+  "scripts": {
+    // 🚀 Start the app in production
+    "start": "node server.js",
+
+    // 🛠️ Run the app in development with hot reload
+    "dev": "nodemon server.js",
+
+    // 🏗️ Build TypeScript files
+    "build": "tsc",
+
+    // 🧹 Lint code using ESLint
+    "lint": "eslint . --ext .js,.ts,.tsx",
+
+    // 🎨 Format code using Prettier
+    "format": "prettier --write .",
+
+    // ✅ Run tests using Jest
+    "test": "jest",
+
+    // 🔁 Watch mode for Jest tests
+    "test:watch": "jest --watch",
+
+    // 🧼 Clean build artifacts
+    "clean": "rm -rf dist && rm -rf build",
+
+    // 🪝 Setup Husky git hooks
+    "prepare": "husky install",
+
+    // 🔎 Type checking without emitting files
+    "type-check": "tsc --noEmit",
+
+    // 📦 Message after installing dependencies
+    "postinstall": "echo 'Dependencies installed!'"
+  }
+}
+```
+
+#### NPX
+
+NPX (Node Package eXecute) là một bộ thực thi NPM packages, cho phép thực thi packages mà không cần tải nó. NPX được tích hợp mặc định từ npm v5.2.0
+
+Ví dụ: `create-react-app` là một package giúp tạo cấu trúc thư mục mẫu cho React project, nó chỉ cần chạy đúng một lần để khởi tạo project nên chưa được tính như một dependencies.
+
+Thực tế, NPX vẫn sẽ tải package đó về (nếu máy cục bộ chưa có), nhưng sẽ xóa bỏ nó sau khi thực thi xong.
+
+### YARN và PNPM
+
+[Yarn](https://yarnpkg.com/) và [PNPM](https://pnpm.io/) là hai Package Managers thay thế cho NPM với một số ưu điểm vượt trội hơn.
+
+```bash
+npm install -g yarn
+
+npm install -g pnpm
+```
+
+Khác với NPM sẽ tải dependencies trực tiếp vào *node_modules*, PNPM sẽ tải chúng vào một kho lưu trữ chung (*single content-addressable storage* - `pnpm store path`) và chỉ thực hiện tạo hard link trong *node_modules*. Từ đó nhiều projects có cùng dependencies thì chỉ cần lưu trữ và tải một lần.
+
+Đặc điểm thứ hai là NPM lưu trữ dependencies theo cấu trúc **flat**, tức là tất cả các dependencies, bất kể nó ở mức bao nhiêu thì cũng sẽ được lưu cùng cấp với nhau. Điều này sẽ khiến cho thư mục *node_modules* chứa rất nhiều thư mục con, trong khi ứng dụng chỉ phụ thuộc vào số ít packages. PNPM thì lại tổ chức theo cấu trúc **non-flat**, lợi dụng đặc điểm của kho lưu trữ chung, PNPM chỉ cần sử dụng hard-link để tham chiếu
