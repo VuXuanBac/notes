@@ -80,6 +80,10 @@ trong đó:
 - `HANDLER`s là một/nhiều callbacks function, được thực thi khi route matched.
   - Callback này có thể nhận vào `req` (đại diện cho request) và `res` (đại diện cho response) và `next` (đại diện cho callback tiếp theo)
 
+*Các methods này được thiết kế như **fluent interface**, cho phép tạo **chaining calls***
+
+Khi mà nhiều routes có `PATH` giống nhau (chỉ khác nhau về HTTP method), ta có thể sử dụng `app.route(PATH)` và lợi dụng đặc điểm có thể **chaining calls** mà gọi các methods `get`, `post`,... để định nghĩa `HANDLER`s riêng.
+
 ### Route path
 
 Pattern cho `PATH` có thể là:
@@ -105,4 +109,225 @@ ExpressJS cũng hỗ trợ định nghĩa parameter trên route path, với các
 - Request URL: http://localhost:3000/exports/2023-2025.csv?timestamp=false&header=true
 - req.params: {"from": "2023", "to": "2025", "format": "csv"}
 - req.query: {"timestamp": "false", "header": "true"}
+```
+
+### Route handler
+
+[Xem thêm](#route-handling)
+
+### Router
+
+ExpressJS hỗ trợ khai báo Router để gom nhóm các routes có điểm chung. Có thể coi Router như một "mini-app" khi nó bao đóng một nhóm các routes (cùng với middlewares), sau đó có thể nạp (mount) chúng vào một route của `app` như một middleware (sử dụng `use()`)
+
+Với sự hỗ trợ của Router, thông thường ứng dụng sẽ module hóa dựa trên routes, tạo Router cho từng module trong thư mục `routes` và mount chúng vào `app`.
+
+Thậm chí có thể mount một Router vào một Router, thực tế `app` cũng là một Router và các Routers đều là các middlewares.
+
+```js
+// src/routes/userRoutes.js
+import { Router } from 'express';
+const router = Router();
+
+router.get('/', (req, res) => {
+  res.send('Get all users');
+});
+
+router.get('/:id', (req, res) => {
+  const { id } = req.params;
+  res.send(`Get user with ID ${id}`);
+});
+
+router.post('/', (req, res) => {
+  const userData = req.body;
+  res.status(201).send('User created');
+});
+
+export default router;
+
+// src/app.js
+import express from 'express';
+import userRoutes from './routes/userRoutes.js';
+
+const app = express();
+
+app.use(express.json());
+
+// Mount the router. So the matched routes becomes
+//  GET /users         ==> 'Get all users'
+//  GET /users/:id     ==> `Get user with ID ${id}`
+// POST /users         ==> 'User created'
+app.use('/users', userRoutes);
+
+app.listen(3000, () => {
+  console.log('Server running at http://localhost:3000');
+});
+```
+
+## Middleware
+
+ExpressJS cho phép triển khai logic của ứng dụng theo một chuỗi các lời gọi hàm, mỗi hàm có trách nhiệm xử lý trên request hoặc response từ kết quả xử lý của hàm phía trước nó. Mỗi hàm như vậy được gọi là **middleware**.
+
+Việc triển khai logic ứng dụng thành các middlewares cho phép tuần tự hóa các logic xử lý, và cũng có thể kết thúc logic xử lý sớm hơn: *chỉ khi middleware phía trước cho phép tiếp tục xử lý request thì các middlewares phía sau mới được gọi*.
+
+Middleware đơn giản chỉ là các hàm callbacks với các đối số là `req` (đại diện cho Request), `res` (đại diện cho Response), `next` (đại diện cho middleware ngay sau nó), nó có thể thực hiện các chức năng:
+- Kiểm tra điều kiện: xác thực, phân quyền, tài nguyên,...
+- Tạo thay đổi trên `req` và `res`
+- Kết thúc xử lý đối với request hoặc gọi middleware tiếp theo để xử lý tiếp request.
+
+Middleware có thể áp dụng ở mức ứng dụng (gán cho `app`), ở mức "mini-app" (gán cho router).
+
+Để gán middleware, ta có thể sử dụng `use()` hoặc `METHOD()` trên `app` hoặc Router. Các methods này đều có thể nhận vào đối số tùy chọn (đầu tiên) là [`PATH`](#route-path), khi đó middleware chỉ được gọi khi route matched, còn nếu không chỉ định thì sẽ được gọi với mọi requests ở phạm vi `app` hoặc Router.
+
+### Route handling
+
+Route handlers (cái mà gán cho `METHOD()`) thực tế là các middlewares được áp dụng chỉ cho một route cụ thể. Điểm đặc biệt là có thể gọi `next('route')` (đối với `app`) hoặc `next('router')` (đối với Router) để kết thúc xử lý đối với matched route hiện tại (và chuyển sang matched route tiếp theo ở scope tương ứng).
+
+```js
+import express from 'express';
+const app = express();
+
+app.get('/users/:id', (req, res, next) => {
+  // if the user ID is 0, skip to the next route
+  if (req.params.id === '0') next('route');
+  else next();
+}, (req, res, next) => {
+  res.send('regular');
+})
+
+app.get('/users/*splat', (req, res, next) => {
+  res.send('special');
+})
+
+app.listen(3000, () => {
+  console.log('Server running at http://localhost:3000');
+});
+
+// GET users/1  ==> 'regular'
+// GET users/0  ==> 'special'
+```
+
+### Error handling
+
+Mặc định các lỗi xảy ra đồng bộ thì đều được Express tự động bắt và xử lý. Tuy nhiên, đối với lỗi xảy ra bất đồng bộ, cần thủ công gọi `next(err)`.
+
+```js
+// auto caught
+app.get('/', (req, res) => {
+  throw new Error('BROKEN') // Express will catch this on its own.
+})
+
+// need to call `next(err)`
+app.get('/', (req, res, next) => {
+  Promise.resolve().then(() => {
+    throw new Error('BROKEN')
+  }).catch(next) // Errors will be passed to Express.
+})
+```
+
+Sau đó, Express sẽ hủy việc thực thi mọi middlewares thông thường phía sau, mà chuyển sang gọi các middlewares xử lý lỗi.
+
+> Việc gọi `next()` với đối số bất kỳ khác `'route'` (và `'router'`, nếu scope là Router) thì đều được coi là báo lỗi
+> Từ v5, nếu middleware trả về một Promise thì Express sẽ tự động gọi `next(value)` nếu Promise đó reject hoặc throw error.
+
+```js
+// auto call `next(err)` if getUserById reject or throw error
+app.get('/user/:id', async (req, res, next) => {
+  const user = await getUserById(req.params.id)
+  res.send(user)
+})
+```
+
+Có một dạng middleware đặc biệt với 4 đối số, nó dùng để triển khai logic xử lý các lỗi xảy ra trong ứng dụng. Các middlewares này luôn phải định nghĩa với đầy đủ 4 đối số: `err` (đại diện cho lỗi), `req`, `res` và `next`.
+
+Express luôn triển khai một error handling middleware mặc định, nó sẽ trả về stack trace (với môi trường development) hoặc `res.statusMessage` (với môi trường production), cụ thể middleware này thực hiện:
+- Gán `res.statusCode = err.status || err.statusCode`
+- Gán `res.statusMessage = nameOf(res.statusCode)`
+- Gộp `res.headers |= err.headers`
+
+### Một số middlewares
+
+[Dưới đây là danh sách các middlewares dùng phổ biến trong ExpressJS](https://expressjs.com/en/resources/middleware.html)
+
+|Middleware|Chức năng|
+|--|--|
+|static|Phản hồi lại các tài nguyên tĩnh: JS, CSS, images,..., thường ở thư mục `public`|
+|serve-static|Tương tự `static` nhưng cần tải từ registry, có nhiều options hơn|
+|body-parser|Phân giải HTTP request body theo một số định dạng cơ bản (JSON, text, binary, URL Form)|
+|compression|Nén HTTP responses|
+|cookie-parser|Phân giải `Cookie` header và gán cho `req.cookies`|
+|session|Thiết lập session ở phía server (sessionID) (development)|
+|cookie-session|Thiết lập session, lưu vào cookie ở phía client|
+|cors|Cho phép cross-origin resource sharing (CORS)|
+|method-override|Cho phép ghi đè `req.method` dựa trên giá trị của `X-HTTP-Method-Override` (hỗ trợ dùng `POST` thay thế cho `PUT` và `DELETE` nếu client code không hỗ trợ)|
+|morgan|HTTP request logger|
+|multer|Xử lý multi-part form (upload files)|
+|response-time|Lưu lại thời gian phản hồi (tính từ lúc bắt đầu middleware đầu tiên đến khi response header được gửi) và ghi vào `X-Response-Time`|
+|timeout|Thiết lập timeout cho request|
+
+## Request và Response
+
+// TODO
+- https://expressjs.com/en/4x/api.html#req.app
+- https://expressjs.com/en/guide/overriding-express-api.html
+
+## Cấu hình
+
+Có thể lưu và cấu hình cho server thông qua method `get` và `set` trên `app`. Bên cạnh [các cấu hình được định nghĩa sẵn](https://expressjs.com/en/4x/api.html#app.settings.table), ta có thể định nghĩa các cấu hình tùy chỉnh.
+
+Khi giá trị của biến cấu hình là true/false, có thể sử dụng các method và properties: `enable()`, `disable()`, `enabled`, `disabled`.
+
+|Biến|Mô tả|
+|--|--|
+|`env`|Environment mode|
+|`view engine`|Template engine được sử dụng
+|`views`|Thư mục chứa templates cần được xử lý bởi template engines, cũng như tìm kiếm template để phản hồi|
+|`view cache`|True để cache các template đã được xử lý|
+|`case sensitive routing`|True nếu muốn so khớp chính xác, xét cả hoa thường|
+|`strict routing`|True nếu muốn so khớp chính xác, tính cả `/` ở cuối. Tức là `/users` và `/users/` là hai PATH khác nhau|
+
+## Template Engine
+
+Template Engine cho phép sinh giao diện động, kết hợp cấu trúc giao diện và biến chứa dữ liệu thành một View, tức là cho phép nhúng mã nguồn NodeJS vào trong giao diện (HTML, JS,...)
+
+ExpressJS (generator) mặc định sử dụng **Pug** làm template engine, bên cạnh hỗ trợ Handlebars, Mustache, EJS.
+
+Để sử dụng một template engine, cần thực hiện:
+
+- `app.set('view engine', 'pug')`: Xác định template engine sử dụng và nạp module xử lý tương ứng
+- `app.set('views', './views')`: Chỉ định thư mục chứa các templates là `views`
+- `npm install pug`: Tải template engine
+- Gọi `res.render(<template-file-name>, <data>)` để sinh giao diện trả về ứng với request hiện tại
+
+
+```js
+// my-express-pug-app/
+// ├── package.json
+// ├── app.js
+// └── views/
+//     └── index.pug
+
+// ============ app.js ============
+import express from 'express';
+
+const app = express();
+
+app.set('view engine', 'pug');
+app.set('views', './views');
+
+app.get('/', (req, res) => {
+  res.render('index', { title: 'Hello, Pug!', message: 'Welcome to Express with Pug!' });
+});
+
+app.listen(3000, () => {
+  console.log('Server running at http://localhost:3000');
+});
+
+// ============ views/index.pug ============
+doctype html
+html
+  head
+    title= title
+  body
+    h1= message
+    p This is a page rendered with the Pug template engine.
 ```
