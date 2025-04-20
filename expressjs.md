@@ -101,7 +101,7 @@ Pattern cho `PATH` có thể là:
 |`/\/abc\|\/xyz/`|`/\/abc\|\/xyz/`|Khớp với các path bắt đầu bằng `abc` hoặc `xyz`|
 |`/user-(\d+)`|Không hỗ trợ|Khớp với các path bắt đầu bằng `user-1` hoặc `user-123`|
 
-ExpressJS cũng hỗ trợ định nghĩa parameter trên route path, với các path segment bắt đầu bằng `:`, và tên chỉ có thể là `[a-zA-Z0-9_]` hoặc kết hợp với `-` và `.` để tạo pattern phức tạp hơn. 
+ExpressJS cũng hỗ trợ định nghĩa named parameter trên route path, với các path segment bắt đầu bằng `:`, và tên chỉ có thể là `[a-zA-Z0-9_]` hoặc kết hợp với `-` và `.` để tạo pattern phức tạp hơn. 
 - *Giá trị thực tế của các parameters này sẽ được gán cho `req.params`*
 
 ```txt
@@ -266,13 +266,24 @@ Express luôn triển khai một error handling middleware mặc định, nó s�
 
 ## Request và Response
 
-// TODO
-- https://expressjs.com/en/4x/api.html#req.app
+[Danh sách các properties và methods hỗ trợ trên `req` và `res`](https://expressjs.com/en/5x/api.html)
 - https://expressjs.com/en/guide/overriding-express-api.html
+
+Ngoài ra, ta cũng có thể ghi đè cách thức hoạt động của các methods hoặc các properties dạng getter
+
+```js
+// override the signature of `res.sendStatus`
+app.response.sendStatus = function (statusCode, type, message) {
+  // code is intentionally kept simple for demonstration purpose
+  return this.contentType(type)
+    .status(statusCode)
+    .send(message)
+}
+```
 
 ## Cấu hình
 
-Có thể lưu và cấu hình cho server thông qua method `get` và `set` trên `app`. Bên cạnh [các cấu hình được định nghĩa sẵn](https://expressjs.com/en/4x/api.html#app.settings.table), ta có thể định nghĩa các cấu hình tùy chỉnh.
+Có thể lưu và cấu hình cho server thông qua method `get` và `set` trên `app`. Bên cạnh [các cấu hình được định nghĩa sẵn](https://expressjs.com/en/5x/api.html#app.settings.table), ta có thể định nghĩa các cấu hình tùy chỉnh.
 
 Khi giá trị của biến cấu hình là true/false, có thể sử dụng các method và properties: `enable()`, `disable()`, `enabled`, `disabled`.
 
@@ -284,6 +295,7 @@ Khi giá trị của biến cấu hình là true/false, có thể sử dụng c�
 |`view cache`|True để cache các template đã được xử lý|
 |`case sensitive routing`|True nếu muốn so khớp chính xác, xét cả hoa thường|
 |`strict routing`|True nếu muốn so khớp chính xác, tính cả `/` ở cuối. Tức là `/users` và `/users/` là hai PATH khác nhau|
+|`query parser`|False nếu không muốn sử dụng query parser, `'simple'` nếu muốn sử dụng [querystring](http://nodejs.org/api/querystring.html), `'extended'` nếu muốn sử dụng [qs](https://www.npmjs.org/package/qs) hoặc có thể truyền vào một hàm parser tùy chỉnh|
 
 ## Template Engine
 
