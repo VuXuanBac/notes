@@ -23,7 +23,7 @@ Prisma, một ORM, nhưng được trang bị (và hướng tới cải thiện)
 
 Tất nhiên, hạn chế của nó là ít khả năng tùy chỉnh hóa và không đảm bảo câu truy vấn là tối ưu với mọi trường hợp.
 
-## Prisma Client
+## Hiểu về Prisma Client
 
 Prisma Client là một thư viện (tự động sinh) giúp ứng dụng có thể tương tác với database với cú pháp của JS/TS.
 
@@ -56,6 +56,10 @@ datasource db {
   url      = env("APP_DATABASE_URL")
 }
 ```
+
+Prisma hỗ trợ kết nối tới cả relational databases như **PostgreSQL**, **SQLite**, **MySQL**, **MS SQL Server** và cả NoSQL databases như **MongoDB**.
+
+Ngoài ra còn hỗ trợ kết nối tới các nền tảng serverless databases như **Neon**, **Supabase** (PostgreSQL), **PlanetScale** (MySQL), **Turso** (SQLite),...
 
 ### Generators
 
@@ -119,6 +123,181 @@ generator client {
 ```
 
 ## Model
+
+**Model** được định nghĩa qua `model` block, bên trong đó định nghĩa các **fields** và **relations**.
+
+Tên của Model theo convention: **Singular** + **PascalCase**. Có thể dùng `@@map("...")` để ánh xạ tên khác cho database tables.
+
+### Fields
+
+Fields trong Model được khai báo với: **Name** + **Type** + **Type Modifiers** + **Attributes**
+
+Field Type có thể là:
+- *Scalar*
+  - `String` (TS `string`)
+  - `Boolean` (TS `boolean`)
+  - `Int` (TS `number`)
+  - `Float` (TS `number`)
+  - `DateTime` (TS `Date`)
+  - `Json` (TS `object`)
+  - `Bytes` (TS `Uint8Array`)
+  - `Decimal` (TS `Decimal`)
+  - `BigInt` (TS `BigInt`)
+  - **Enum**
+- *Relation*: Model
+- *`Unsupported("...")`*: Dùng database type mà Prisma chưa hỗ trợ
+
+Enum được khai báo qua block `enum`.
+- PostgreSQL và MySQL hỗ trợ sẵn
+- Prisma tạo interface để triển khai trên SQLite và MongoDB
+
+Có thể sử dụng một trong các modifiers ngay sau Field Type:
+- `[]`: Tạo kiểu mảng (hiện tại chỉ có PostgreSQL, MongoDB và CockroachDB là hỗ trợ)
+- `?`: Tạo nullable field.
+
+Có thể mô tả đặc trưng của Field qua các attributes:
+- `@id`
+- `@default` xác định giá trị mặc định: giá trị tĩnh (scalar, array, json), `autoincrement()`, `uuid(4|7)`, `now()` (thời điểm record được tạo) hoặc `dbgenerated(...)` để sử dụng một hàm của database.
+- `@unique`
+- `@updatedAt` (Prisma sinh giá trị, khác với )
+- `@relation` mô tả cho kết nối giữa các bảng như reference name, reference from (`fields`), reference to (`references`), `onUpdate`, `onDelete`
+- `@map` chỉ định tên của cột/thuộc tính tương ứng trong database
+- `@ignore` không sinh Prisma Client API cho field này
+- `@db` (với `db` là tên của `datasource` block) để ánh xạ kiểu sang một kiểu khác trong databases
+
+Có thể khai báo các đặc trưng ở mức model: `@@id`, `@@unique`, `@@index`, `@@map`, `@@ignore`, `@@schema`
+
+### Relations
+
+Sử dụng attribute `@relation` chỉ định fields được dùng làm relation, chúng giúp có thể tương tác (đọc/ghi) với relation như một thuộc tính khi sử dụng Prisma Client, mà không ánh xạ vào database.
+
+**Với many-to-many relations**, có thể sử dụng chế độ ngầm định đối với bảng trung gian, Prisma sẽ quản lý bảng này và nó sẽ không thể truy cập qua Prisma Client. Điều đó giúp query đơn giản hơn khi không cần qua một bảng trung gian. *Prisma khuyến khích sử dụng chế độ này nếu bảng trung gian không có dữ liệu riêng*
+- Tuy nhiên, các bảng chính phải đảm bảo chỉ sử dụng một trường làm ID, không được gán `@unique` cho ID
+- Có thể đổi tên cho bảng trung gian qua `@relation`, tuy nhiên không thể xác định các options khác
+
+```prisma
+model User {
+  id      Int      @id @default(autoincrement())
+  posts   Post[]   // 1-n relation at Prisma level
+}
+
+model Post {
+  id         Int        @id @default(autoincrement())
+  authorId   Int
+  author     User       @relation(fields: [authorId], references: [id]) // n-1 relation at Prisma level
+  categories Category[] // implicit m-n relation at Prisma level
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  posts Post[] // implicit m-n relation at Prisma level
+}
+```
+
+**Khi hai models có nhiều quan hệ với nhau** thì cần chỉ định `name` cho từng quan hệ khi khai báo `@relation`.
+
+```prisma
+model User {
+  id           Int     @id @default(autoincrement())
+  name         String?
+  writtenPosts Post[]  @relation("WrittenPosts")
+  pinnedPost   Post?   @relation("PinnedPost")
+}
+
+model Post {
+  id         Int     @id @default(autoincrement())
+  title      String?
+  author     User    @relation("WrittenPosts", fields: [authorId], references: [id]) // this field is for `WrittenPosts`, not `PinnedPost`
+  authorId   Int
+  pinnedBy   User?   @relation("PinnedPost", fields: [pinnedById], references: [id])
+  pinnedById Int?    @unique
+}
+```
+
+**Với self-relations**, ta cần sử dụng `@relation` cho hai đầu của quan hệ, tức là cần truyền `name` để nhóm chúng lại.
+
+```prisma
+// 1-1 self-relation
+model User {
+  id          Int     @id @default(autoincrement())
+  name        String?
+  successorId Int?    @unique
+  successor   User?   @relation("BlogOwnerHistory", fields: [successorId], references: [id])
+  predecessor User?   @relation("BlogOwnerHistory")
+}
+
+// 1-n self-relation
+model User {
+  id        Int     @id @default(autoincrement())
+  name      String?
+  teacherId Int?
+  teacher   User?   @relation("TeacherStudents", fields: [teacherId], references: [id])
+  students  User[]  @relation("TeacherStudents")
+}
+
+// implicit m-n self-relation
+model User {
+  id         Int     @id @default(autoincrement())
+  name       String?
+  followedBy User[]  @relation("UserFollows")
+  following  User[]  @relation("UserFollows")
+}
+```
+
+**Về referential actions (`onUpdate`, `onDelete`)**, chúng xác định các hành động thực hiện trên `fields` khi có thao tác update/delete trên `references`. Các giá trị có thể là:
+- `Cascade` update/delete `fields` tương ứng
+- `SetNull` cập nhật `fields` thành NULL
+- `SetDefault` cập nhật `fields` thành giá trị xác định trong `@default`
+- `Restrict` ngăn xóa update/delete trên `references` nếu `fields` đang có giá trị
+- `NoAction` tương tự như `Restrict` trong một số databases (MySQL, MS SQL Server) hoặc sẽ không thực hiện gì trong SQLite, MongoDB.
+
+### Ví dụ
+
+```prisma
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  name    String?
+  role    Role     @default(USER)
+  posts   Post[]
+  profile Profile?
+
+  @@map("account")
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String @map("info")
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model Post {
+  id         Int        @id @default(autoincrement())
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  title      String
+  data       Json       @default("{ \"hello\": \"world\" }")
+  published  Boolean    @default(false)
+  authorId   Int
+  categories Category[]
+  author     User       @relation(fields: [authorId], references: [id])
+
+  @@unique([authorId, title])
+  @@index([title])
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String
+  posts Post[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+```
 
 ## CLI
 
