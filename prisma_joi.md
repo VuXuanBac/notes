@@ -659,6 +659,44 @@ const groupUsers = await prisma.user.groupBy({
 
 ### Raw SQL
 
+Prisma hỗ trợ 4 methods sau để thực hiện Raw SQL:
+- `$queryRaw` và `$queryRawUnsafe`: Trả về records (như trong `SELECT`)
+- `$executeRaw` và `$executeRawUnsafe`: Trả về số lượng records tác động (như trong `CREATE`,`UPDATE`,`DELETE`)
+
+Trong đó phiên bản "safe" nhận vào một tagged template (`\`...\``) cho phép truyền giá trị trực tiếp. Prisma sẽ tiền xử lý chuỗi đầu vào này để tránh SQL injection. Tuy nhiên, nếu không sử dụng đúng có thể vẫn có nguy cơ.
+
+Xem thêm: [SQL injection prevention](https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/raw-queries#sql-injection-prevention)
+
+#### TypedSQL
+
+Prisma giới thiệu TypedSQL để có thể thực hiện Raw SQL nhưng vẫn có được những sự hỗ trợ của TS như sử dụng query APIs.
+
+Với hướng tiếp cận này, ta khai báo các lệnh SQL vào một tệp riêng `.sql` bên trong thư mục `prisma/sql`. Lệnh SQL này sẽ được import vào chương trình như một hàm và được thực thi với `$queryRawTyped`.
+
+Tuy nhiên, đây vẫn là tính năng thử nghiệm của Prisma và nó chỉ phù hợp với query cố định.
+
+```sql
+-- ------- prisma/sql/getUserByAges.sql -------
+
+-- @param {Int} $1:minAge
+-- @param {Int} $2:maxAge
+SELECT id, name, age
+FROM users
+WHERE age > $1 AND age < $2
+```
+
+```ts
+import { PrismaClient } from '@prisma/client'
+import { getUserByAges } from '@prisma/client/sql'
+
+const prisma = new PrismaClient()
+
+const users = await prisma.$queryRawTyped(getUserByAges(18, 60))
+console.log(users)
+```
+
+Xem thêm: [TypedSQL](https://www.prisma.io/docs/orm/prisma-client/using-raw-sql/typedsql)
+
 ### Transaction
 
 Prisma Client tự động tạo transactions cho các lệnh sau:
@@ -695,6 +733,210 @@ function transfer(from: string, to: string, amount: number) {
 ```
 
 ### Extensions
+
+Prisma Client cho phép định nghĩa thêm tính năng cho nó thông qua các Extensions
+- [`model`](#extended-model) thêm methods hoặc fields cho model object
+- [`client`](#extended-client) thêm methods cho Prisma Client
+- [`query`](#extended-query) thay đổi cách thức thực thi query cho Prisma Client
+- [`result`](#extended-result) thêm fields vào kết quả thực hiện truy vấn
+
+Sau khi thêm extensions cho Prisma Client, ta thu được một phiên bản mới bao đóng (mà không thay đổi trực tiếp) phiên bản gốc. *Tất cả các phiên bản của Prisma Client đều cùng tương tác trên một query engine*.
+
+Để thêm Extension cho Prisma Client, ta sử dụng `$extends` trên client instance. Có thể truyền cho nó một JS object hoặc một biến tạo bởi `Prisma.defineExtension` với cú pháp tương tự.
+
+Extension vẫn là một Preview Features: `previewFeature = ["clientExtensions"]`
+
+Xem thêm: [Một số Extensions và ví dụ triển khai](https://www.prisma.io/docs/orm/prisma-client/client-extensions/extension-examples)
+
+#### Extended Model
+
+```ts
+// extend `user` model with `signUp` method
+const prisma = new PrismaClient().$extends({
+  model: {
+    user: {
+      async signUp(email: string) {
+        await prisma.user.create({ data: { email } })
+      },
+    },
+  },
+})
+
+// call directly
+const user = await prisma.user.signUp('john@prisma.io')
+```
+
+Có thể khai báo methods cho tất cả models với option `$allModels`
+- Lúc này, để lấy model object đang thực thi method, có thể gọi `Prisma.getExtensionContext(this)`, với `this` là đối số đầu tiên của method
+
+```ts
+const prisma = new PrismaClient().$extends({
+  model: {
+    $allModels: {
+      async exists<T>(
+        this: T,
+        where: Prisma.Args<T, 'findFirst'>['where']
+      ): Promise<boolean> {
+        // Get the current model at runtime
+        const context = Prisma.getExtensionContext(this)
+
+        const result = await (context as any).findFirst({ where })
+        return result !== null
+      },
+    },
+  },
+})
+
+// call
+// `exists` method available on all models
+await prisma.user.exists({ name: 'Alice' })
+await prisma.post.exists({
+  OR: [{ title: { contains: 'Prisma' } }, { content: { contains: 'Prisma' } }],
+})
+```
+
+#### Extended Client
+
+Thêm methods để có thể gọi trực tiếp trên Prisma Client instance
+
+```ts
+const prisma = new PrismaClient().$extends({
+  client: {
+    $log: (s: string) => console.log(s),
+    async $totalQueries() {
+      const index_prisma_client_queries_total = 0
+      // Prisma.getExtensionContext(this) in the following block
+      // returns the current client instance
+      const metricsCounters = await (
+        await Prisma.getExtensionContext(this).$metrics.json()
+      ).counters
+
+      return metricsCounters[index_prisma_client_queries_total].value
+    },
+  },
+})
+
+async function main() {
+  prisma.$log('Hello world')
+  const totalQueries = await prisma.$totalQueries()
+  console.log(totalQueries)
+}
+```
+
+#### Extended Query
+
+Thay đổi cách thức thực thi của các query có sẵn (như `findMany`, `aggregation`, `$queryRaw`...) trên một hay toàn bộ model object
+
+```ts
+const prisma1 = new PrismaClient().$extends({
+  query: {
+    user: {
+      async findMany({ model, operation, args, query }) {
+        // take incoming `where` and set `age`
+        args.where = { ...args.where, age: { gt: 18 } }
+
+        return query(args)
+      },
+    },
+  },
+})
+
+const prisma2 = new PrismaClient().$extends({
+  query: {
+    $allModels: {
+      async findMany({ model, operation, args, query }) {
+        // set `take` and fill with the rest of `args`
+        args = { ...args, take: 100 }
+
+        return query(args)
+      },
+    },
+  },
+})
+
+const prisma3 = new PrismaClient().$extends({
+  query: {
+    user: {
+      $allOperations({ model, operation, args, query }) {
+        /* your custom logic here */
+        return query(args)
+      },
+    },
+  },
+})
+
+await prisma1.user.findMany() // returns users whose age is greater than 18
+```
+
+#### Extended Result
+
+Thêm fields và methods vào kết quả của truy vấn. 
+
+> Giá trị của các fields và methods này được xác định khi đọc (không phải khi thực hiện query)
+> Hiện tại không hỗ trợ relation trong computed fields.
+
+```ts
+// add custom field to query result object
+const prisma1 = new PrismaClient().$extends({
+  result: {
+    user: {
+      fullName: {
+        // the dependencies
+        needs: { firstName: true, lastName: true },
+        compute(user) {
+          // the computation logic
+          return `${user.firstName} ${user.lastName}`
+        },
+      },
+    },
+  },
+})
+
+// add custom method to query result object
+const prisma2 = new PrismaClient().$extends({
+  result: {
+    user: {
+      save: {
+        needs: { id: true },
+        compute(user) {
+          return () =>
+            prisma.user.update({ where: { id: user.id }, data: user })
+        },
+      },
+    },
+  },
+})
+
+console.log((await prisma1.user.findFirst()).fullName)
+
+const user = await prisma2.user.findUniqueOrThrow({ where: { id: someId } })
+user.email = 'mynewmail@mailservice.com'
+await user.save()
+```
+
+### Type
+
+Prisma Client hỗ trợ sẵn các kiểu dữ liệu cho các đối tượng truyền vào query:
+
+```ts
+// can pass into `select` option
+const userEmail: Prisma.UserSelect = {email: true}
+
+// can pass into `include` option
+const userPosts: Prisma.UserInclude = {posts: true}
+```
+
+Ta có thể sử dụng các tiện ích kiểu dữ liệu sau khi muốn xác định một kiểu custom dựa trên các kiểu mà Prisma Client đã sinh.
+- `Args<Type, Operation>['ArgName']` lấy Type của `ArgName` bên trong `Operation` thực hiện trên model `Type`
+- `Result<Type, Arguments, Operation>` lấy Type của kết quả trả về khi thực hiện `Operation` trên model `Type` với đối số `Arguments`
+- `Payload<Type, Operation>` lấy cấu trúc của kết quả trả về khi thực hiện `Operation` trên model `Type`
+- `Exact<Input, Shape>` thu hẹp `Input` về dạng `Shape`
+
+```ts
+type ExtendedUser = Prisma.Result<typeof prisma.user, { select: { id: true } }, 'findFirstOrThrow'>
+
+type FindFirstUserWhere = Prisma.Args<typeof prisma.user, 'findFirst'>['where']
+```
 
 ## CLI
 
