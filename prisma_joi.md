@@ -13,6 +13,8 @@ Schema là trung tâm của Prisma, kết nối giữa ứng dụng (các truy v
 
 Sau khi có Schema thì có thể tạo **Prisma Client** để tạo các truy vấn và thay đổi database với cú pháp của JS (hoặc TS).
 
+## CLI
+
 Tải Prisma với lệnh sau:
 
 ```bash
@@ -22,6 +24,19 @@ npm install prisma --save-dev
 # Prisma Client
 npm install @prisma/client
 ```
+
+|Commands|Mô tả|
+|--|--|
+|`prisma init`|Tạo thư mục `prisma` và tệp `schema.prisma`|
+|`prisma format`|Định dạng lại các tệp Schema|
+|`prisma generate`|Sinh các tài nguyên khai báo trong các khối `generator`|
+|`prisma db push`|Cập nhật trực tiếp (không tạo migrations) trạng thái hiện tại của Schema vào database|
+|`prisma db seed`|Chạy lệnh `seed` định nghĩa trong `package.json`: `"prisma": {"seed": "command_to_seed"}`|
+|`prisma migrate dev --name <migration_name>`|Sử dụng [**Shadow database**](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database) để phát hiện các thay đổi và tạo migrations cần thiết, sau đó migrate các migrations này vào development database, cập nhật bảng `_prisma_migrations`|
+|`prisma migrate reset`|Drop/Reset database và schema => Tạo mới => Chạy migate => Chạy seed scripts|
+|`prisma migrate deploy`|Chỉ thực hiện chạy migrations đã có vào database (và tạo database nếu chưa có)|
+
+[**Xem thêm**](https://www.prisma.io/docs/orm/reference/prisma-cli-reference)
 
 ## So sánh với các thư viện khác
 
@@ -937,12 +952,3 @@ type ExtendedUser = Prisma.Result<typeof prisma.user, { select: { id: true } }, 
 
 type FindFirstUserWhere = Prisma.Args<typeof prisma.user, 'findFirst'>['where']
 ```
-
-## CLI
-
-|Commands|Mô tả|
-|--|--|
-|`prisma format`|Định dạng lại các tệp Schema|
-|
-
-# Joi
