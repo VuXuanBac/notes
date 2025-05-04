@@ -14,6 +14,19 @@ Sau khi tạo schema, ta có thể dùng nó để đánh giá tính hợp lệ 
 
 Có các kiểu dữ liệu sau trong Joi: `string`, `number`, `boolean`, `array`, `symbol`, `object`, `date`, `function`, `binary`, `alternatives` và `any`
 
+## Các properties dùng chung cho các kiểu
+
+- `type` đọc kiểu dữ liệu của schema
+- `allow` bổ sung vào danh sách matched values
+- `valid` lọc ra những values hợp lệ
+- `default` dùng giá trị mặc định (literal, ref, function,) nếu giá trị đầu vào là `undefined`
+- `cast` ép kiểu cho matched value
+  - `map`: dùng cho object, chuyển về `Map`
+  - `number`: dùng cho boolean, date
+  - `set`: dùng cho array, chuyển về `Set`
+  - `string`: dùng cho binary, boolean, date và number
+- `concat` kết hợp rules giữa các schemas cùng kiểu
+
 ## String
 
 - Mặc định, empty string không pass, trừ khi xác định `allow('')`
@@ -90,3 +103,89 @@ const schema = Joi.object({
 ```
 
 - Đổi tên cho các trường: `rename(from, to)`
+
+## Alternatives
+
+- Dùng khi muốn tạo một schema dựa trên điều kiện.
+- **Union Style**: sử dụng `try(...)` để thêm các schema cần kiểm tra (hoặc truyền mảng trực tiếp vào `alternatives()`)
+  - Xác định mode kiểm tra qua `match(mode)`
+    - `all`: yêu cầu khớp toàn bộ
+    - `any`: có thể khớp bất kỳ schema nào
+    - `one`: phải khớp đúng một schema
+- **If...Else Style**: Có thể cấu hình nâng cao với `conditional(condition, options)`: cấu hình trong trường hợp nào thì dùng schema nào
+  - **condition**: có thể là object key, reference hoặc schema
+  - **options**: chỉ định khi `condition` thỏa mãn điều kiện thì sẽ dùng schema nào
+    - `is` và `not`: Xác định điều kiện
+    - `then` và `otherwise`: Khi điều kiện true/false thì sẽ dùng schema nào
+    - `switch`: Mảng của `{is, then}` để tạo switch...case...
+
+```ts
+// When `b`'s value is a number then `a` must be a string
+// Otherwise, `a` must be a number
+const schema = {
+    a: Joi.alternatives().conditional('b', { is: Joi.number(), then: Joi.string(), otherwise: Joi.number() }),
+    b: Joi.any()
+};
+
+// When current value is a object with b is 5 (other keys can existed), then the value must be a object with key `a` is a string 
+// Otherwise, the value must be a object with key `a` is a number
+const schema = Joi.alternatives().conditional(Joi.object({ b: 5 }).unknown(), {
+    then: Joi.object({
+        a: Joi.string(),
+        b: Joi.any()
+    }),
+    otherwise: Joi.object({
+        a: Joi.number(),
+        b: Joi.any()
+    })
+});
+```
+
+## Cấu hình nâng cao
+
+### Tạo custom rule
+
+Có thể dùng method `custom` để tạo một validation rule bằng một hàm tự tạo. 
+
+Hàm tự tạo này có thể thực hiện bất kỳ chuyển đổi nào. Nó cần trả về giá trị (đã biến đổi hoặc valid value) hoặc tạo error (invalid value)
+
+Hàm tự tạo có thể nhận vào hai đối số
+- `value` giá trị dùng để đánh giá
+- `{schema, state, prefs, original, error, message, warn}`
+  - `schema` biểu diễn schema hiện tại
+  - `state` trạng thái kiểm tra hiện tại
+  - `preferences`
+  - `original` giá trị gốc của `value` trước khi thực hiện bất kỳ biến đổi nào
+  - `error(code, [local], [localState])` hàm để sinh mã lỗi
+  - `message(messages, [local])` hàm để sinh message
+  - `warn(code, [local])` hàm để sinh cảnh báo
+
+```ts
+const method = (value, helpers) => {
+
+    // Throw an error (will be replaced with 'any.custom' error)
+    if (value === '1') {
+        throw new Error('nope');
+    }
+
+    // Replace value with a new value
+    if (value === '2') {
+        return '3';
+    }
+
+    // Use error to return an existing error code
+    if (value === '4') {
+        return helpers.error('any.invalid');
+    }
+
+    // Override value with undefined to unset
+    if (value === '5') {
+        return undefined;
+    }
+
+    // Return the value unchanged
+    return value;
+};
+
+const schema = Joi.string().custom(method, 'custom validation');
+```
