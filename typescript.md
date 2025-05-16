@@ -8,6 +8,67 @@ Bộ compiler của TS là `tsc`. Quá trình transpile sẽ thực hiện loạ
 
 TS compiler cũng hỗ trợ **Downleveling** trong quá trình transpile, với option `--target`, ví dụ `tsc --target es2015`. Mặc định `target = es5`.
 
+## Config và CLI
+
+Để cấu hình cho `tsc` khi biên dịch mã nguồn, ta định nghĩa tệp `tsconfig.json` ở thư mục gốc.
+
+Có thể sử dụng `npx tsc --init` để sinh tự động `tsconfig.json`.
+
+Một số cấu hình
+
+|Trường|Ý nghĩa|
+|--|--|
+|`files`, `include`, `exclude`|Lọc danh sách các files cần biên dịch. `include` và `exclude` cho phép sử dụng glob patterns. *`exclude` chỉ đối với các files đã `include`*|
+|`compilerOptions.target`|Phiên bản JS cần biên dịch về. VD: `es5`, `es6`|
+|`compilerOptions.module`|Xác định module loader trong mã nguồn, nó ảnh hưởng đến kết quả biên dịch. VD: `CommonJS`, `ES2022`, `ES6`|
+|`compilerOptions.outDir`|Thư mục chứa kết quả biên dịch|
+|`compilerOptions.rootDir`|Thư mục tham chiếu làm thư mục gốc khi biên dịch. VD: Nếu `rootDir: "./src"` thì sẽ biên dịch các files bên trong `src` và đặt chúng vào thư mục `outDir`; **các files ngoài `src` (nếu được `include`) sẽ lỗi**|
+|`compilerOptions.rootDirs`|Danh sách thư mục tham chiếu làm thư mục gốc khi biên dịch, chúng sẽ được coi như cùng gốc. VD: Nếu `rootDirs: ["./cores", "./helpers/utils"]` thì sẽ biên dịch các files bên trong `cores` và bên trong `./helpers/utils` sau đó đặt chúng cùng vào thư mục xác định bởi `outDir`|
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "module": "ESNext", // project's module loader [ESM]
+    "target": "ES2020", // target JS version [modern ECMAScripts]
+    "moduleResolution": "nodenext", // module resolution strategy [NodeJS v12]
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true, // allow `import x from y` (instead of `import * as x from y`) even if the module `y` not use export default
+    "outDir": "./dist",
+    "strict": true,
+    "skipLibCheck": true, // skip checking the `.d.ts` files
+    "resolveJsonModule": true, // allow to import `.json`
+    "forceConsistentCasingInFileNames": true, // strictly on casing
+    "noEmit": false,
+    "isolatedModules": true, // not consider import on compiling each file (assume that each file is isolated good)
+    "baseUrl": ".", // allow import relatively same as absolute import
+  }
+}
+```
+
+Về `tsc` command, ta có một số options sau:
+
+```bash
+# Run a compile based on a backwards look through the fs for a tsconfig.json
+tsc
+# Emit JS for any .ts files in the folder src, with the default settings
+tsc src/*.ts
+# Set used replaced path to `tsconfig.json`
+tsc --project tsconfig.production.json
+# Emit d.ts files for a js file with showing compiler options which are booleans
+tsc index.js --declaration --emitDeclarationOnly
+# Emit a single .js file from two files via compiler options which take string arguments
+tsc app.ts util.ts --target esnext --outfile index.js
+
+
+# Check the files which should be processed
+tsc --listFilesOnly
+
+# Delete outputs
+tsc --clean
+```
+
+
 ## Strict Modes
 
 Mã nguồn ứng dụng có thể chỉ thực hiện type annotating cho một số phần và để những phần khác sử dụng loose typed của JS. TS Compiler vẫn có thể dịch nó về JS. Ta có thể thực hiện cấu hình **strictness** để chỉ thị `tsc` mức độ nghiêm ngặt của việc áp dụng type annotating trong mã nguồn. `strict` flag chứa một họ các strict mode, tương ứng với sự kiểm tra nghiêm ngặt trong một số trường hợp cụ thể:
