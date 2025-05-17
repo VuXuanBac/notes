@@ -772,3 +772,49 @@ YARN cũng triển khai một **global cache** để lưu các dependencies củ
 Khác với NPM sẽ tải dependencies trực tiếp vào *node_modules*, PNPM sẽ tải chúng vào một kho lưu trữ chung (*single content-addressable storage* - `pnpm store path`) và chỉ thực hiện tạo hard link trong *node_modules*. Từ đó nhiều projects có cùng dependencies thì chỉ cần lưu trữ và tải một lần.
 
 Đặc điểm thứ hai là NPM lưu trữ dependencies theo cấu trúc **flat**, tức là tất cả các dependencies, bất kể nó ở mức bao nhiêu thì cũng sẽ được lưu cùng cấp với nhau. Điều này sẽ khiến cho thư mục *node_modules* chứa rất nhiều thư mục con, trong khi ứng dụng chỉ phụ thuộc vào số ít packages. PNPM thì lại tổ chức theo cấu trúc **non-flat**, lợi dụng đặc điểm của kho lưu trữ chung, PNPM chỉ cần sử dụng hard-link để tham chiếu.
+
+## CLI
+
+Để (biên dịch và) thực thi một ứng dụng, sử dụng `node <entry-point>` trong đó `entry-point` là đường dẫn tương đối (so với thư mục hiện tại) tới một module.
+
+NodeJS hỗ trợ `--watch` và `--watch-path` (hỗ trợ cả directory) để tự động restart mỗi khi có sự thay đổi trên tệp hoặc thư mục chỉ định theo dõi.
+- Mặc định `--watch` sẽ theo dõi entry point
+- Có thể chỉ định `--watch-preserve-output` để không xóa các console log cũ khi restart
+
+Có thể sử dụng `--env-file` để chỉ định một hay nhiều đường dẫn tới `.env` files, giúp nạp trước các biến môi trường cho ứng dụng, các files sẽ được nối và ghi đè nếu xung đột. 
+- `.env` file ở dạng `KEY=VALUE` trên mỗi dòng, `VALUE` có thể được bao trong backtick (\`), `'` hoặc `"`, chúng sẽ được bỏ qua khi phân giải.
+- `VALUE` trải dài trên nhiều dòng có thể bao đóng trong `""`
+
+Xem thêm: [CLI Options](https://nodejs.org/docs/latest-v20.x/api/cli.html)
+
+## Debugger
+
+NodeJS hỗ trợ tính năng debug, bằng việc thiết lập breakpoint với `debugger;` trong mã nguồn.
+
+Để thực thi trong chế độ debug, gọi `NODE_INSPECT_RESUME_ON_START=1 node inspect <entry-point>`
+- Việc bỏ `NODE_INSPECT_RESUME_ON_START=1` sẽ luôn debug ở dòng 1, thay vì từ vị trí đầu tiên xuất hiện `debugger;`
+
+**Một số options ở chế độ debug**:
+- `c`/`cont`: Continue
+- `n`/`next`: Step next
+- `s`/`step`: Step in
+- `o`/`out` : Step out
+- `pause`   : Pause
+- `sb(line)`/`setBreakpoint(line)`: Tạo breakpoint ở dòng chỉ định (mặc định là dòng hiện tại)
+- `sb(module, line)`: Tạo breakpoint ở dòng trong module chỉ định
+- `sb(module, line, 'condition')`: Tạo breakpoint khi điều kiện `condition` trả về true
+- `cb(...)`/`clearBreakpoint(...)`: Xóa breakpoint
+- `watch(expression)`, `unwatch(index)`: Theo dõi giá trị của một biểu thức trong suốt phiên thực thi cho tới khi xóa bởi `unwatch`
+- `watchers`: In danh sách giá trị của các biểu thức đang theo dõi (tự động in tại mỗi breakpoint)
+- `exec`/`p`: Thực thi và in giá trị của biểu thức
+- `bt`/`backtrace`: In danh sách backtrace
+- `list(N)`: In mã nguồn của `N` dòng trước và `N` dòng phía sau.
+- `run`, `restart`, `kill`: Khởi động lại/Kết thúc việc thực thi script
+
+NodeJS debugger còn hỗ trợ kết nối trực tiếp với DevTools của Chrome bằng việc chỉ định option `node --inspect[=[HOST:]PORT]` khi chạy ứng dụng
+- Mặc định kết nối vào `127.0.0.1:9229`
+- `--inspect` sẽ thực thi code trước khi debugger được kết nối
+- `--inspect-wait` sẽ đợi debugger kết nối mới thực thi code
+- `--inspect-brk` sẽ break ngay tại dòng đầu tiên của entry point khi debugger được kết nối.
+
+Xem thêm: [Debugger](https://nodejs.org/docs/latest-v20.x/api/debugger.html)
