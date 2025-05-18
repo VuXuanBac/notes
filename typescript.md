@@ -6,9 +6,11 @@ TS là phiên bản `static type` của JS. Thực tế mã nguồn ứng dụng
 
 Bộ compiler của TS là `tsc`. Quá trình transpile sẽ thực hiện loại bỏ các **Type Annotations**, do đó mà sẽ không ảnh hưởng đến logic xử lý của chương trình.
 
-TS compiler cũng hỗ trợ **Downleveling** trong quá trình transpile, với option `--target`, ví dụ `tsc --target es2015`. Mặc định `target = es5`.
+`tsc` cũng hỗ trợ **Downleveling** trong quá trình transpile, với option `--target`, ví dụ `tsc --target es2015`. Mặc định `target = es5`.
 
-## Config và CLI
+## Cấu hình và CLI
+
+### Cấu hình
 
 Để cấu hình cho `tsc` khi biên dịch mã nguồn, ta định nghĩa tệp `tsconfig.json` ở thư mục gốc.
 
@@ -16,14 +18,14 @@ Có thể sử dụng `npx tsc --init` để sinh tự động `tsconfig.json`.
 
 Một số cấu hình
 
-|Trường|Ý nghĩa|
-|--|--|
-|`files`, `include`, `exclude`|Lọc danh sách các files cần biên dịch. `include` và `exclude` cho phép sử dụng glob patterns. *`exclude` chỉ đối với các files đã `include`*|
-|`compilerOptions.target`|Phiên bản JS cần biên dịch về. VD: `es5`, `es6`|
-|`compilerOptions.module`|Xác định module loader trong mã nguồn, nó ảnh hưởng đến kết quả biên dịch. VD: `CommonJS`, `ES2022`, `ES6`|
-|`compilerOptions.outDir`|Thư mục chứa kết quả biên dịch|
-|`compilerOptions.rootDir`|Thư mục tham chiếu làm thư mục gốc khi biên dịch. VD: Nếu `rootDir: "./src"` thì sẽ biên dịch các files bên trong `src` và đặt chúng vào thư mục `outDir`; **các files ngoài `src` (nếu được `include`) sẽ lỗi**|
-|`compilerOptions.rootDirs`|Danh sách thư mục tham chiếu làm thư mục gốc khi biên dịch, chúng sẽ được coi như cùng gốc. VD: Nếu `rootDirs: ["./cores", "./helpers/utils"]` thì sẽ biên dịch các files bên trong `cores` và bên trong `./helpers/utils` sau đó đặt chúng cùng vào thư mục xác định bởi `outDir`|
+| Trường                        | Ý nghĩa                                                                                                                                                                                                                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `files`, `include`, `exclude` | Lọc danh sách các files cần biên dịch. `include` và `exclude` cho phép sử dụng glob patterns. *`exclude` chỉ đối với các files đã `include`*                                                                                                                                       |
+| `compilerOptions.target`      | Phiên bản JS cần biên dịch về. VD: `es5`, `es6`                                                                                                                                                                                                                                    |
+| `compilerOptions.module`      | Xác định module loader trong mã nguồn, nó ảnh hưởng đến kết quả biên dịch. VD: `CommonJS`, `ES2022`, `ES6`                                                                                                                                                                         |
+| `compilerOptions.outDir`      | Thư mục chứa kết quả biên dịch                                                                                                                                                                                                                                                     |
+| `compilerOptions.rootDir`     | Thư mục tham chiếu làm thư mục gốc khi biên dịch. VD: Nếu `rootDir: "./src"` thì sẽ biên dịch các files bên trong `src` và đặt chúng vào thư mục `outDir`; **các files ngoài `src` (nếu được `include`) sẽ lỗi**                                                                   |
+| `compilerOptions.rootDirs`    | Danh sách thư mục tham chiếu làm thư mục gốc khi biên dịch, chúng sẽ được coi như cùng gốc. VD: Nếu `rootDirs: ["./cores", "./helpers/utils"]` thì sẽ biên dịch các files bên trong `cores` và bên trong `./helpers/utils` sau đó đặt chúng cùng vào thư mục xác định bởi `outDir` |
 
 ```json
 // tsconfig.json
@@ -32,19 +34,21 @@ Một số cấu hình
     "module": "ESNext", // project's module loader [ESM]
     "target": "ES2020", // target JS version [modern ECMAScripts]
     "moduleResolution": "nodenext", // module resolution strategy [NodeJS v12]
-    "esModuleInterop": false,
-    "allowSyntheticDefaultImports": true, // allow `import x from y` (instead of `import * as x from y`) even if the module `y` not use export default
     "outDir": "./dist",
     "strict": true,
-    "skipLibCheck": true, // skip checking the `.d.ts` files
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true, // allow `import x from y` (instead of `import * as x from y`) even if the module `y` not use export default
+    "skipLibCheck": true, // skip compiling the `.d.ts` files
     "resolveJsonModule": true, // allow to import `.json`
     "forceConsistentCasingInFileNames": true, // strictly on casing
     "noEmit": false,
-    "isolatedModules": true, // not consider import on compiling each file (assume that each file is isolated good)
+    "isolatedModules": true, // not consider import on compiling each file (assume that each isolated file is typed-defined well)
     "baseUrl": ".", // allow import relatively same as absolute import
   }
 }
 ```
+
+### CLI
 
 Về `tsc` command, ta có một số options sau:
 
@@ -68,13 +72,12 @@ tsc --listFilesOnly
 tsc --clean
 ```
 
+### Strict Modes
 
-## Strict Modes
-
-Mã nguồn ứng dụng có thể chỉ thực hiện type annotating cho một số phần và để những phần khác sử dụng loose typed của JS. TS Compiler vẫn có thể dịch nó về JS. Ta có thể thực hiện cấu hình **strictness** để chỉ thị `tsc` mức độ nghiêm ngặt của việc áp dụng type annotating trong mã nguồn. `strict` flag chứa một họ các strict mode, tương ứng với sự kiểm tra nghiêm ngặt trong một số trường hợp cụ thể:
+Mã nguồn ứng dụng có thể chỉ thực hiện type annotating cho một số phần và để những phần khác sử dụng loose typed của JS. `tsc` vẫn có thể dịch nó về JS. Ta có thể thực hiện cấu hình **strictness** để chỉ thị `tsc` mức độ nghiêm ngặt của việc áp dụng type annotating trong mã nguồn. `strict` flag chứa một họ các strict mode, tương ứng với sự kiểm tra nghiêm ngặt trong một số trường hợp cụ thể:
 - `noImplicitAny: true`: Báo lỗi cho các biến được suy đoán ngầm định (implicitly infer) hoặc được gán là kiểu `any` (kiểu mặc định nếu `tsc` không thể suy đoán một kiểu cụ thể)
 - `strictNullChecks: true`: Báo lỗi nếu một biến có thể nhận giá trị `null` hoặc `undefined` trong khi thực hiện một hành động mà cần một giá trị cụ thể (ví dụ truy cập thuộc tính trên biến đó)
-- Danh sách các [**strict modes**](https://www.typescriptlang.org/tsconfig/#strictNullChecks)
+- Danh sách các **[strict modes](https://www.typescriptlang.org/tsconfig/#strictNullChecks)**
 - `strict: true`: Kích hoạt tất cả các **strict modes**
 
 ## Data Types
@@ -114,7 +117,7 @@ Với **union type**, `tsc` sẽ báo lỗi nếu thực hiện một hành đ�
 - Sử dụng `switch..case..` và các so sánh bằng/khác (`===`, `!==`, `==`, `!=`)
 - Sử dụng toán tử `in` (kiểm tra một thuộc tính có thuộc một biến hay prototype của nó hay không)
 - Sử dụng toán tử `instanceof`
-- Sử dụng [**type predicates**](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates) - định nghĩa một hàm predicate (boolean) trả về dạng `parameterName is Type`. Khi đó mỗi khi gọi hàm đó để kiểm tra một biến thì `tsc` biết khi nào biến đó sẽ có kiểu dữ liệu nào.
+- Sử dụng **[type predicates](https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates)** - định nghĩa một hàm predicate (boolean) trả về dạng `parameterName is Type`. Khi đó mỗi khi gọi hàm đó để kiểm tra một biến thì `tsc` biết khi nào biến đó sẽ có kiểu dữ liệu nào.
 
 **Các giá trị hằng số thuộc `number`, `string` và `boolean` (`true`, `false`) có thể trở thành kiểu dữ liệu** => **literal types**. Điều đó, khi kết hợp với **union**, ta có thể tạo một kiểu enum đơn giản.
 
@@ -313,9 +316,10 @@ function greeter(fn: (a: string) => void) {
 
 #### Generic Functions
 
-Ta có thể định nghĩa **hàm dưới dạng tổng quát** (**generic functions**), ở đó chữ ký của hàm không phụ thuộc vào các kiểu cụ thể (thay vào đó hàm được định nghĩa để tương thích với nhiều kiểu khác nhau). Khi đó, `tsc` xác định chữ ký của hàm tùy thuộc vào lời gọi (khi truyền đối số cụ thể). Các kiểu dữ liệu mà hàm phụ thuộc sẽ được khai báo ngay sau tên hàm.
-
+Ta có thể định nghĩa **hàm dưới dạng tổng quát** (**generic functions**), ở đó chữ ký của hàm không phụ thuộc vào các kiểu cụ thể (thay vào đó hàm được định nghĩa để tương thích với nhiều kiểu khác nhau).
+- Lúc này, `tsc` xác định chữ ký của hàm tùy thuộc vào lời gọi (khi truyền đối số cụ thể). Các kiểu dữ liệu mà hàm phụ thuộc sẽ được khai báo ngay sau tên hàm.
 - Ví dụ, hàm `map` ở đây có chữ ký phụ thuộc vào hai kiểu tổng quát đại diện bởi `Input` và `Output`. `Input` và `Output` thực sự đại diện cho kiểu dữ liệu nào chỉ được xác định tùy thuộc vào đối số truyền cho `map`.
+
 ```tsx
 function map<Input, Output>(arr: Input[], func: (arg: Input) => Output): Output[] {
   return arr.map(func);
@@ -380,6 +384,138 @@ const a = multiply(10, 1, 2, 3, 4);
 ```tsx
 function sum({ a, b, c }: { a: number; b: number; c: number }) {
   console.log(a + b + c);
+}
+```
+
+## Declaration
+
+**Declaration files** (`*.d.ts`) được sử dụng với mục đích khai báo các types cho ứng dụng, chúng mặc định sẽ không được `tsc` biên dịch (trừ khi option `skipLibCheck: false`). Với các packages được viết trên JS thuần thì declaration file giúp bổ sung phần Type cho chúng.
+
+Hầu hết các thư viện phổ biến đều có phiên bản TS tương ứng, nổi tiếng nhất là sản phẩm từ cộng đồng **[DefinitelyTyped](https://github.com/DefinitelyTyped)**
+
+Ví dụ với Express được viết trên JS thuần, có thể tải package
+
+```bash
+npm install --save-dev @types/express
+```
+
+để bổ sung phần Typescript.
+
+Mặc định, `tsc` sẽ nạp các declaration files từ thư mục `node_modules/@types`, ta có thể bổ sung các thư mục tìm kiếm khác thông qua cấu hình `typeRoots`. Ví dụ
+
+```json
+{
+  "compilerOptions": {
+    "typeRoots": ["node_modules/@types", "./types"]
+  }
+}
+```
+
+*Chú ý, không cần thiết phải chỉ định `typeRoots` vì mặc định TSC tự động nạp toàn bộ các tệp `.ts` và `.d.ts` bên trong thư mục hiện tại*
+
+### Declaration Merging
+
+Declaration Merging đề cập đến việc `tsc` tự động gộp nhiều khai báo có cùng tên thành một declaration chứa những đặc trưng của tất cả các khai báo ban đầu.
+
+Các khai báo trong TS có thể tạo ra ít nhất một trong ba đối tượng:
+- **namespace**
+- **type**
+- **value**, các đối tượng có thể xuất hiện trong tệp output (JS)
+
+Ví dụ, khi khai báo 2 interfaces cùng tên thì chúng được gộp thành một interface:
+- Khi có thuộc tính cùng tên là hàm thì sẽ được coi là overloading
+- Khi có thuộc tính cùng tên không phải là hàm và khác kiểu thì sẽ báo lỗi
+
+```ts
+interface Box {
+  height: number;
+  width: number;
+  clone(inside: Animal): Animal;
+}
+interface Box {
+  scale: number;
+  clone(inside: Item): Item;
+}
+
+// Should be merged as
+interface Box {
+  scale: number;
+  height: number;
+  width: number;
+
+  clone(inside: Item): Item;
+  clone(inside: Animal): Animal;
+}
+```
+
+Về namespace, chúng giúp bao đóng các khai báo và tránh xung đột tên với các khai báo bên ngoài.
+- Namespace cho phép truy cập tới các thành viên bên trong (interface, type, class, function, variables,...) nếu như chúng được `export`.
+- Có thể truy cập tới thành viên bên trong qua tên namespace.
+
+Khi gộp các namespaces, các thành viên bên trong cũng được gộp với nhau (nếu cùng tên), tuy nhiên, các thành viên nội bộ (không được `export`) cũng không được gộp.
+
+```ts
+namespace Animals {
+  export class Zebra {}
+  export interface Legged {
+    numberOfHooves: number;
+  }
+}
+namespace Animals {
+  export interface Legged {
+    numberOfLegs: number;
+  }
+  export class Dog {}
+}
+
+// Should be merged as
+namespace Animals {
+  export interface Legged {
+    numberOfLegs: number;
+    numberOfHooves: number;
+  }
+  export class Dog {}
+  export class Zebra {}
+}
+```
+
+Đặc biệt, namespace có thể gộp với class, function, enum
+
+```ts
+function buildLabel(name: string): string {
+  return buildLabel.prefix + name + buildLabel.suffix;
+}
+namespace buildLabel {
+  export let suffix = "";
+  export let prefix = "Hello, ";
+}
+
+console.log(buildLabel("Sam Smith")); // Hello Sam Smith
+```
+
+### Ví dụ thực tế
+
+> Thư viện `@types/express` định nghĩa kiểu dữ liệu cho `Request`, tuy nhiên, nếu muốn thêm dữ liệu vào `Request` (ví dụ như `cookie-parser` thêm `cookies` vào `Request`) thì cần làm như thế nào để báo cho `tsc` biết kiểu dữ liệu của đối tượng đó?
+
+Câu trả lời là sử dụng Declaration Merging.
+
+Thực tế, `Request` trong `@types/express` cũng được xây dựng trên `Request` trong `@types/express-serve-static-core`.
+
+Các thư viện middlewares khác cũng thực hiện mở rộng `Request` type:
+- `cookie-parser` thêm vào `cookies`
+- `urlencoded` và `json` thêm vào `body`
+- `session` thêm vào `session`
+- `passport` thêm vào `user`
+
+Để mở rộng `Request`, ta tạo **declaration file**
+
+```ts
+declare global {
+  namespace Express {
+    interface Request {
+      locale: 'en' | 'vi'
+    }
+  }
 }
 ```
 
