@@ -480,12 +480,12 @@ NodeJS cung cấp sẵn một số modules sau đây:
 
 NodeJS hỗ trợ hai định dạng để tổ chức modules, cho phép nó có thể phân giải vị trí của modules và nạp chúng: **CommonJS** (CJS) và **ECMAScript** (ES)
 
-||CommonJS|ECMAScript|
-|--|--|--|
-|import|`require()`|`import`|
-|export|`module.exports`|`export`|
-|extension mặc định|`.cjs`|`.mjs`|
-|package.json `type`|`commonjs`|`module`|
+|                     | CommonJS         | ECMAScript |
+| ------------------- | ---------------- | ---------- |
+| import              | `require()`      | `import`   |
+| export              | `module.exports` | `export`   |
+| extension mặc định  | `.cjs`           | `.mjs`     |
+| package.json `type` | `commonjs`       | `module`   |
 
 Mặc định các project NodeJS sẽ sử dụng CommonJS, ta có thể chuyển sang sử dụng ECMAScript bằng việc chỉ định `type: "module"` bên trong `package.json` của project.
 
@@ -583,13 +583,13 @@ Package là một module đặc biệt, là một cây thư mục được mô t
 
 Dưới đây là một số trường trong `package.json` mà NodeJS xử lý. [Xem thêm](https://nodejs.org/docs/latest/api/packages.html#nodejs-packagejson-field-definitions)
 
-|Trường|Mô tả|
-|--|--|
-|`name`|Định danh cho package, dùng khi import|
-|`main`|Module mặc định sẽ được import khi import package|
-|`type`|Xác định module loader (CJS hay ES) sẽ sử dụng khi nạp các module có extension `.js`|
-|`exports`|Cho phép tạo alias tới các modules trong package, được sử dụng khi module bên ngoài import module bên trong|
-|`imports`|Tạo alias tương tự `exports` nhưng chỉ phục vụ nội bộ (phân giải lệnh import ở các modules bên trong). Alias luôn phải bắt đầu bằng `#`|
+| Trường    | Mô tả                                                                                                                                   |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`    | Định danh cho package, dùng khi import                                                                                                  |
+| `main`    | Module mặc định sẽ được import khi import package                                                                                       |
+| `type`    | Xác định module loader (CJS hay ES) sẽ sử dụng khi nạp các module có extension `.js`                                                    |
+| `exports` | Cho phép tạo alias tới các modules trong package, được sử dụng khi module bên ngoài import module bên trong                             |
+| `imports` | Tạo alias tương tự `exports` nhưng chỉ phục vụ nội bộ (phân giải lệnh import ở các modules bên trong). Alias luôn phải bắt đầu bằng `#` |
 
 ```js
 // ============ Project files structure ============
@@ -640,12 +640,12 @@ NPM là bộ quản lý packages mặc định của NodeJS, cho phép tải, c�
 
 NPM cung cấp một CLI để tương tác với registry của nó. Dưới đây là một số lệnh:
 
-|Lệnh|Mục đích|
-|--|--|
-|`npm init`|Khởi tạo một package (tạo `package.json`) tại thư mục hiện tại với các thông tin được người dùng cung cấp (interactive)|
-|`npm install [@scope/]<package-name>[@version]`|Tìm trong `@scope` và tải `<package-name>` (cùng toàn bộ dependencies của nó) với `@version`|
-|`npm update [@scope/]<package-name>[@version]`|Cập nhật package tới phiên bản xác định, hoặc mới nhất nếu không chỉ định|
-|`npm uninstall [@scope/]<package-name>[@version]`|Xóa package và dependencies của nó, cũng như các entry trong `package.json`|
+| Lệnh                                              | Mục đích                                                                                                                |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `npm init`                                        | Khởi tạo một package (tạo `package.json`) tại thư mục hiện tại với các thông tin được người dùng cung cấp (interactive) |
+| `npm install [@scope/]<package-name>[@version]`   | Tìm trong `@scope` và tải `<package-name>` (cùng toàn bộ dependencies của nó) với `@version`                            |
+| `npm update [@scope/]<package-name>[@version]`    | Cập nhật package tới phiên bản xác định, hoặc mới nhất nếu không chỉ định                                               |
+| `npm uninstall [@scope/]<package-name>[@version]` | Xóa package và dependencies của nó, cũng như các entry trong `package.json`                                             |
 
 Khi tải một package, NPM sẽ đặt nó (cùng toàn bộ các **dependencies** của nó) vào thư mục **node_modules** cùng cấp với thư mục project. Đồng thời, một entry sẽ được thêm vào trường **`dependencies`** trong `package.json` (mặc định từ npm v5)
 
@@ -662,17 +662,17 @@ Ngoài việc thêm entry cho `package.json`, NPM cũng thực hiện cập nh�
 
 NPM cho phép sử dụng **semantic versioning** ([semver](https://github.com/npm/node-semver#versions)) để xác định phiên bản cho các packages. Ví dụ:
 
-|Cú pháp|Hợp lệ|Không|Ý nghĩa|
-|--|--|--|--|
-|`>=1.2.7`|`1.2.8`, `2.5.3`|`1.2.6`||
-|`>1.2`|`1.3.0`, `2.0.0`|`1.2.1`||
-|`1.2.7 \|\| >=1.2.9 <2.0.0`|`1.2.7`, `1.4.6`|`1.2.8`, `2.0.0`||
-|`1.2 - 2.3.4`|`>=1.2.0 <=2.3.4`||Range|
-|`~1.2`|`1.2.x`||Chỉ chấp nhận thay đổi *patch*|
-|`~1`|`1.x.x`||Chỉ chấp nhận thay đổi *minor*|
-|`^1.2.3`|`>=1.2.3 <2.0.0`||Không vượt quá *major*|
-|`^0.2.3`|`>=0.2.3 <0.3.0`||Không vượt quá *minor*|
-|`^0.0.3`|`>=0.0.3 <0.0.4`||Không vượt quá *patch*|
+| Cú pháp                     | Hợp lệ            | Không            | Ý nghĩa                        |
+| --------------------------- | ----------------- | ---------------- | ------------------------------ |
+| `>=1.2.7`                   | `1.2.8`, `2.5.3`  | `1.2.6`          |                                |
+| `>1.2`                      | `1.3.0`, `2.0.0`  | `1.2.1`          |                                |
+| `1.2.7 \|\| >=1.2.9 <2.0.0` | `1.2.7`, `1.4.6`  | `1.2.8`, `2.0.0` |                                |
+| `1.2 - 2.3.4`               | `>=1.2.0 <=2.3.4` |                  | Range                          |
+| `~1.2`                      | `1.2.x`           |                  | Chỉ chấp nhận thay đổi *patch* |
+| `~1`                        | `1.x.x`           |                  | Chỉ chấp nhận thay đổi *minor* |
+| `^1.2.3`                    | `>=1.2.3 <2.0.0`  |                  | Không vượt quá *major*         |
+| `^0.2.3`                    | `>=0.2.3 <0.3.0`  |                  | Không vượt quá *minor*         |
+| `^0.0.3`                    | `>=0.0.3 <0.0.4`  |                  | Không vượt quá *patch*         |
 
 #### Tasks
 
@@ -741,21 +741,21 @@ npm install -g pnpm
 
 Dưới đây là cheetsheet CLI và một số đặc điểm giữa các package managers này. **Chú ý là chúng đều có thể truy cập vào NPM registry**
 
-| **Task**                             | **npm**                            | **Yarn**                         | **pnpm**                         |
-|-------------------------------------|------------------------------------|----------------------------------|----------------------------------|
-| 📌 Lockfile name                    | `package-lock.json`                | `yarn.lock`                      | `pnpm-lock.yaml`                 |
-| 🔧 Init project                     | `npm init`                         | `yarn init`                      | `pnpm init`                      |
-| 📥 Install all deps                 | `npm install`                      | `yarn`                           | `pnpm install`                   |
-| 📦 Install a package                | `npm install <pkg> [-g] [--save-dev]`                | `yarn [global] add <pkg> [--dev]`                 | `pnpm add <pkg> [--save-dev]`                 |
-| 🗑️ Remove a package                | `npm uninstall <pkg>`              | `yarn remove <pkg>`              | `pnpm remove <pkg>`              |
-| 🧹 Prune unused packages            | `npm prune`                                  | *(Handled automatically)*                   | `pnpm prune`                                 |
-| 📜 List installed packages          | `npm list`                         | `yarn list`                      | `pnpm list`                      |
-| 🚀 Run a script (from package.json) | `npm run <script>`                 | `yarn <script>`                  | `pnpm run <script>`              |
-| 🧼 Clean install (reset deps)       | `rm -rf node_modules && npm i`     | `yarn install --force`           | `pnpm install --force`           |
-| 📝 Update a package                 | `npm update <pkg>`                 | `yarn upgrade <pkg>`             | `pnpm update <pkg>`              |
-| 🐛 Audit dependencies (check security vulnerabilities)               | `npm audit`                        | `yarn audit`                     | `pnpm audit`                     |
-| 🌍 Run package without install      | `npx <pkg>`                        | `yarn dlx <pkg>`                 | `pnpm dlx <pkg>`                 |
-| 📦 Link from local folder        | `npm link ../local-folder`                 | `yarn link ../local-folder`              | `pnpm link ../local-folder`                    |
+| **Task**                                              | **npm**                               | **Yarn**                          | **pnpm**                      |
+| ----------------------------------------------------- | ------------------------------------- | --------------------------------- | ----------------------------- |
+| 📌 Lockfile name                                       | `package-lock.json`                   | `yarn.lock`                       | `pnpm-lock.yaml`              |
+| 🔧 Init project                                        | `npm init`                            | `yarn init`                       | `pnpm init`                   |
+| 📥 Install all deps                                    | `npm install`                         | `yarn`                            | `pnpm install`                |
+| 📦 Install a package                                   | `npm install <pkg> [-g] [--save-dev]` | `yarn [global] add <pkg> [--dev]` | `pnpm add <pkg> [--save-dev]` |
+| 🗑️ Remove a package                                    | `npm uninstall <pkg>`                 | `yarn remove <pkg>`               | `pnpm remove <pkg>`           |
+| 🧹 Prune unused packages                               | `npm prune`                           | *(Handled automatically)*         | `pnpm prune`                  |
+| 📜 List installed packages                             | `npm list`                            | `yarn list`                       | `pnpm list`                   |
+| 🚀 Run a script (from package.json)                    | `npm run <script>`                    | `yarn <script>`                   | `pnpm run <script>`           |
+| 🧼 Clean install (reset deps)                          | `rm -rf node_modules && npm i`        | `yarn install --force`            | `pnpm install --force`        |
+| 📝 Update a package                                    | `npm update <pkg>`                    | `yarn upgrade <pkg>`              | `pnpm update <pkg>`           |
+| 🐛 Audit dependencies (check security vulnerabilities) | `npm audit`                           | `yarn audit`                      | `pnpm audit`                  |
+| 🌍 Run package without install                         | `npx <pkg>`                           | `yarn dlx <pkg>`                  | `pnpm dlx <pkg>`              |
+| 📦 Link from local folder                              | `npm link ../local-folder`            | `yarn link ../local-folder`       | `pnpm link ../local-folder`   |
 
 #### YARN
 
@@ -784,6 +784,7 @@ NodeJS hỗ trợ `--watch` và `--watch-path` (hỗ trợ cả directory) để
 Có thể sử dụng `--env-file` để chỉ định một hay nhiều đường dẫn tới `.env` files, giúp nạp trước các biến môi trường cho ứng dụng, các files sẽ được nối và ghi đè nếu xung đột. 
 - `.env` file ở dạng `KEY=VALUE` trên mỗi dòng, `VALUE` có thể được bao trong backtick (\`), `'` hoặc `"`, chúng sẽ được bỏ qua khi phân giải.
 - `VALUE` trải dài trên nhiều dòng có thể bao đóng trong `""`
+- *Hiện tại NodeJS chưa hỗ trợ interpolation (nhúng biến môi trường khác vào biến môi trường hiện tại)*
 
 Xem thêm: [CLI Options](https://nodejs.org/docs/latest-v20.x/api/cli.html)
 

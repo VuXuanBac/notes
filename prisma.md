@@ -25,16 +25,16 @@ npm install prisma --save-dev
 npm install @prisma/client
 ```
 
-|Commands|Mô tả|
-|--|--|
-|`prisma init`|Tạo thư mục `prisma` và tệp `schema.prisma`|
-|`prisma format`|Định dạng lại các tệp Schema|
-|`prisma generate`|Sinh các tài nguyên khai báo trong các khối `generator`|
-|`prisma db push`|Cập nhật trực tiếp (không tạo migrations) trạng thái hiện tại của Schema vào database|
-|`prisma db seed`|Chạy lệnh `seed` định nghĩa trong `package.json`: `"prisma": {"seed": "command_to_seed"}`|
-|`prisma migrate dev --name <migration_name>`|Sử dụng [**Shadow database**](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database) để phát hiện các thay đổi và tạo migrations cần thiết, sau đó migrate các migrations này vào development database, cập nhật bảng `_prisma_migrations`|
-|`prisma migrate reset`|Drop/Reset database và schema => Tạo mới => Chạy migate => Chạy seed scripts|
-|`prisma migrate deploy`|Chỉ thực hiện chạy migrations đã có vào database (và tạo database nếu chưa có)|
+| Commands                                     | Mô tả                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prisma init`                                | Tạo thư mục `prisma` và tệp `schema.prisma`                                                                                                                                                                                                                                     |
+| `prisma format`                              | Định dạng lại các tệp Schema                                                                                                                                                                                                                                                    |
+| `prisma generate`                            | Sinh các tài nguyên khai báo trong các khối `generator`                                                                                                                                                                                                                         |
+| `prisma db push`                             | Cập nhật trực tiếp (không tạo migrations) trạng thái hiện tại của Schema vào database                                                                                                                                                                                           |
+| `prisma db seed`                             | Chạy lệnh `seed` định nghĩa trong `package.json`: `"prisma": {"seed": "command_to_seed"}`                                                                                                                                                                                       |
+| `prisma migrate dev --name <migration_name>` | Sử dụng [**Shadow database**](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/shadow-database) để phát hiện các thay đổi và tạo migrations cần thiết, sau đó migrate các migrations này vào development database, cập nhật bảng `_prisma_migrations` |
+| `prisma migrate reset`                       | Drop/Reset database và schema => Tạo mới => Chạy migate => Chạy seed scripts                                                                                                                                                                                                    |
+| `prisma migrate deploy`                      | Chỉ thực hiện chạy migrations đã có vào database (và tạo database nếu chưa có)                                                                                                                                                                                                  |
 
 [**Xem thêm**](https://www.prisma.io/docs/orm/reference/prisma-cli-reference)
 
@@ -397,13 +397,13 @@ model Short {
 
 Polymorphic chỉ một entity có thể có quan hệ với một hoặc nhiều dạng entities khác nhau. Điều này khiến Polymorphic giống với Table Inheritance ở việc nhiều entities có chung thuộc tính, đặc biệt giống với MTI khi tách biệt entity chứa thuộc tính chung.
 
-||MTI|Polymorphic|
-|--|--|--|
-|Ví dụ|`Post` có thể là `Blog` hoặc `Short`|`Comment` có thể thuộc vào `Blog` hoặc `Short`|
-|Bản chất|Kế thừa|Composition|
-|Đặc điểm|`Post` là trừu tượng hóa của `Blog` và `Short`|`Comment` là một thành phần trong `Blog` và `Short`|
-|Khi bỏ qua relation|`Post` chưa chứa đầy đủ dữ liệu|`Comment` có thể coi là có đủ dữ liệu|
-|Tham chiếu|Thường đặt tham chiếu ở `Blog` hoặc `Short`|Thường đặt tham chiếu vào `Comment`|
+|                     | MTI                                            | Polymorphic                                         |
+| ------------------- | ---------------------------------------------- | --------------------------------------------------- |
+| Ví dụ               | `Post` có thể là `Blog` hoặc `Short`           | `Comment` có thể thuộc vào `Blog` hoặc `Short`      |
+| Bản chất            | Kế thừa                                        | Composition                                         |
+| Đặc điểm            | `Post` là trừu tượng hóa của `Blog` và `Short` | `Comment` là một thành phần trong `Blog` và `Short` |
+| Khi bỏ qua relation | `Post` chưa chứa đầy đủ dữ liệu                | `Comment` có thể coi là có đủ dữ liệu               |
+| Tham chiếu          | Thường đặt tham chiếu ở `Blog` hoặc `Short`    | Thường đặt tham chiếu vào `Comment`                 |
 
 Hiện tại, ***Prisma cũng không hỗ trợ triển khai Polymorphic đầy đủ***, ta vẫn cần xử lý thủ công, hoặc sử dụng [ZenStack](https://zenstack.dev/)
 
@@ -450,6 +450,9 @@ const prisma = new PrismaClient();
 
 export default prisma;
 ```
+
+Chú ý: **Khi chỉ định `output` cho generator không phải là `node_modules/.prisma/client` thì cần chỉ định cụ thể đường dẫn thay vì dùng `@prisma/client` như trên.**
+- Nếu dùng TypeScript, có thể chỉ định trong `tsconfig.json`: `compilerOptions.paths: ["@prisma/client": "path/to/generated/prisma/output"]` để vẫn có thể sử dụng đoạn code trên
 
 Mỗi Prisma Client quản lý một connection pool (số lượng khoảng `num_physical_cpus * 2 + 1` cho relational databases, và khoảng 100 đối với MongoDB), nên thông thường ứng dụng chỉ cần tạo một instance cho Prisma Client. Xem thêm [Quản lý databases connections](https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/databases-connections)
 
