@@ -86,23 +86,22 @@ Khi mà nhiều routes có `PATH` giống nhau (chỉ khác nhau về HTTP metho
 
 ### Route path
 
-Pattern cho `PATH` có thể là:
-- Một string pattern
-  - `(...)?` optional pattern. Từ v5 chuyển sang dùng cú pháp `{...}`
-  - `+` tương tự Regex. Từ v5 không hỗ trợ
-  - `*` khớp với một hoặc nhiều ký tự bất kỳ. Từ v5 yêu cầu phải xác định tên cho nó
-- Một Regex pattern. Từ v5 không hỗ trợ cú pháp Regex bên trong string pattern
-- Một mảng của string/regex pattern
+Pattern cho `PATH` có thể là một string/regexp pattern hoặc một mảng các string/regexp pattern
+- *Named Path Segment*: `:name`, path segment có thể nhận giá trị bất kỳ. 
+  - Có thể kết hợp sử dụng với `-` và `.` để tạo các path segment phức tạp hơn
+  - Có thể định nghĩa một [callback để tiền xử lý các named path](#param-callback)
+- *Optional*: `{...}`, phần tương ứng có thể có hoặc không
+- *Splat*: `*name` khớp với một hoặc nhiều ký tự bất kỳ
+- Reserved Characters: `()[]?+!` (cần dùng `\` để escape chúng trong pattern)
 
-|v4|v5|Ý nghĩa|
-|--|--|--|
-|`/abcd`|`/abcd`|Khớp với path bắt đầu bằng `abcd`|
-|`/a(bc)?/*`|`/a{bc}/{*splat}`|Khớp với các path bắt đầu bằng `abc/` hoặc `a/ddddef` hoặc `a/ANY123/ddddef`|
-|`/\/abc\|\/xyz/`|`/\/abc\|\/xyz/`|Khớp với các path bắt đầu bằng `abc` hoặc `xyz`|
-|`/user-(\d+)`|Không hỗ trợ|Khớp với các path bắt đầu bằng `user-1` hoặc `user-123`|
+*Giá trị thực tế của các parameters này sẽ được gán cho `req.params`*
 
-ExpressJS cũng hỗ trợ định nghĩa named parameter trên route path, với các path segment bắt đầu bằng `:`, và tên chỉ có thể là `[a-zA-Z0-9_]` hoặc kết hợp với `-` và `.` để tạo pattern phức tạp hơn. 
-- *Giá trị thực tế của các parameters này sẽ được gán cho `req.params`*
+| Pattern             | Ý nghĩa                                               |
+| ------------------- | ----------------------------------------------------- |
+| `/abcd`             | Khớp với path bắt đầu bằng `abcd`                     |
+| `/a{/:bc}/{*splat}` | Khớp với các path bắt đầu bằng `abc` hoặc `a/ANY123/` |
+| `/\/abc\|\/xyz/`    | Khớp với các path bắt đầu bằng `abc` hoặc `xyz`       |
+
 
 ```txt
 - Route path: /exports/:from-:to.:format
@@ -163,6 +162,41 @@ app.listen(3000, () => {
 });
 ```
 
+### Param Callback
+
+Cả app và router đều cho phép định nghĩa một bộ tiền xử lý với named path segment với method `app.param(name, callback)` hoặc `router.param(name, callback)`.
+
+Cụ thể, với mỗi request gửi đến server mà request URL của nó khớp với ít nhất một path pattern chứa named segment thì Express sẽ gọi tới callback tương ứng với named segment đó.
+- *Callback này được gọi ngay trước các routes handlers và middlewares định nghĩa riêng cho route đó*
+- *Khi có nhiều routes cùng khớp với request URL thì callback chỉ gọi một lần*
+
+Param callback được định nghĩa với các tham số theo thứ tự: `req`, `res`, `next`, `value` và `name` (trong đó `value` là giá trị của path segment và `name` là tên của path segment đó)
+
+Riêng app cho phép truyền vào một mảng các named segment, khi đó, gọi `next` sẽ thực hiện gọi param callback cho named segment phía sau, và gọi `next` ở named segment cuối cùng trong mảng sẽ gọi middleware/route handler của route hiện tại.
+
+```ts
+app.param('id', (req, res, next, id) => {
+  console.log('CALLED ONLY ONCE')
+  next()
+})
+
+app.get('/user/:id', (req, res, next) => {
+  console.log('although this matches')
+  next()
+})
+
+app.get('/user/:id', (req, res) => {
+  console.log('and this matches too')
+  res.end()
+})
+
+// GET /user/42
+//
+// CALLED ONLY ONCE
+// although this matches
+// and this matches too
+```
+
 ## Middleware
 
 ExpressJS cho phép triển khai logic của ứng dụng theo một chuỗi các lời gọi hàm, mỗi hàm có trách nhiệm xử lý trên request hoặc response từ kết quả xử lý của hàm phía trước nó. Mỗi hàm như vậy được gọi là **middleware**.
@@ -208,7 +242,11 @@ app.listen(3000, () => {
 
 ### Error handling
 
-Mặc định các lỗi xảy ra đồng bộ thì đều được Express tự động bắt và xử lý. Tuy nhiên, đối với lỗi xảy ra bất đồng bộ, cần thủ công gọi `next(err)`.
+Mặc định các lỗi (kế thừa từ `Error`) xảy ra trong ứng dụng đều được Express tự động bắt và xử lý.
+
+Ngoài ra, việc gọi `next()` với đối số bất kỳ khác `'route'` (và `'router'`, nếu scope là Router) đều được coi là báo lỗi.
+
+**Đối với v4, các lỗi xảy ra *bất đồng bộ* cần thủ công gọi `next(err)`**.
 
 ```js
 // auto caught
@@ -224,22 +262,36 @@ app.get('/', (req, res, next) => {
 })
 ```
 
-Sau đó, Express sẽ hủy việc thực thi mọi middlewares thông thường phía sau, mà chuyển sang gọi các middlewares xử lý lỗi.
-
-> Việc gọi `next()` với đối số bất kỳ khác `'route'` (và `'router'`, nếu scope là Router) thì đều được coi là báo lỗi
-> Từ v5, nếu middleware trả về một Promise thì Express sẽ tự động gọi `next(value)` nếu Promise đó reject hoặc throw error.
+**Từ v5, nếu middleware trả về một Rejected Promise thì Express sẽ tự động gọi `next(value)`**
 
 ```js
-// auto call `next(err)` if getUserById reject or throw error
+// auto call `next(err)` if getUserById rejected
 app.get('/user/:id', async (req, res, next) => {
   const user = await getUserById(req.params.id)
   res.send(user)
 })
 ```
 
-Có một dạng middleware đặc biệt với 4 đối số, nó dùng để triển khai logic xử lý các lỗi xảy ra trong ứng dụng. Các middlewares này luôn phải định nghĩa với đầy đủ 4 đối số: `err` (đại diện cho lỗi), `req`, `res` và `next`.
+Tuy nhiên, nếu bên trong middleware có gọi một lời gọi bất đồng bộ thì vẫn cần xử lý thủ công lỗi đó
 
-Express luôn triển khai một error handling middleware mặc định, nó sẽ trả về stack trace (với môi trường development) hoặc `res.statusMessage` (với môi trường production), cụ thể middleware này thực hiện:
+```js
+// missing try...catch will hanging the request because of Express can not call the error handler to handle this asynchronous error
+app.get('/user/:id', async (req, res, next) => {
+  setTimeout(() => {
+    try {
+      throw new Error('BROKEN')
+    } catch (err) {
+      next(err)
+    }
+  }, 100)
+})
+```
+
+Khi có lỗi xảy ra, Express sẽ hủy việc thực thi mọi middlewares thông thường phía sau, mà chuyển sang gọi các middlewares xử lý lỗi.
+
+Các middlewares xử lý lỗi luôn phải định nghĩa đầy đủ 4 tham số theo thứ tự: `err` (đại diện cho lỗi), `req`, `res` và `next`.
+
+Express có sẵn một error handling middleware mặc định, nó sẽ trả về stack trace (với môi trường development) hoặc `res.statusMessage` (với môi trường production). Cụ thể, middleware này thực hiện:
 - Gán `res.statusCode = err.status || err.statusCode`
 - Gán `res.statusMessage = nameOf(res.statusCode)`
 - Gộp `res.headers |= err.headers`
@@ -248,21 +300,21 @@ Express luôn triển khai một error handling middleware mặc định, nó s�
 
 [Dưới đây là danh sách các middlewares dùng phổ biến trong ExpressJS](https://expressjs.com/en/resources/middleware.html)
 
-|Middleware|Chức năng|
-|--|--|
-|static|Phản hồi lại các tài nguyên tĩnh: JS, CSS, images,..., thường ở thư mục `public`|
-|serve-static|Tương tự `static` nhưng cần tải từ registry, có nhiều options hơn|
-|body-parser|Phân giải HTTP request body theo một số định dạng cơ bản (JSON, text, binary, URL Form)|
-|compression|Nén HTTP responses|
-|cookie-parser|Phân giải `Cookie` header và gán cho `req.cookies`|
-|session|Thiết lập session ở phía server (sessionID) (development)|
-|cookie-session|Thiết lập session, lưu vào cookie ở phía client|
-|cors|Cho phép cross-origin resource sharing (CORS)|
-|method-override|Cho phép ghi đè `req.method` dựa trên giá trị của `X-HTTP-Method-Override` (hỗ trợ dùng `POST` thay thế cho `PUT` và `DELETE` nếu client code không hỗ trợ)|
-|morgan|HTTP request logger|
-|multer|Xử lý multi-part form (upload files)|
-|response-time|Lưu lại thời gian phản hồi (tính từ lúc bắt đầu middleware đầu tiên đến khi response header được gửi) và ghi vào `X-Response-Time`|
-|timeout|Thiết lập timeout cho request|
+| Middleware      | Chức năng                                                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| static          | Phản hồi lại các tài nguyên tĩnh: JS, CSS, images,..., thường ở thư mục `public`                                                                            |
+| serve-static    | Tương tự `static` nhưng cần tải từ registry, có nhiều options hơn                                                                                           |
+| body-parser     | Phân giải HTTP request body theo một số định dạng cơ bản (JSON, text, binary, URL Form)                                                                     |
+| compression     | Nén HTTP responses                                                                                                                                          |
+| cookie-parser   | Phân giải `Cookie` header và gán cho `req.cookies`                                                                                                          |
+| session         | Thiết lập session ở phía server (sessionID) (development)                                                                                                   |
+| cookie-session  | Thiết lập session, lưu vào cookie ở phía client                                                                                                             |
+| cors            | Cho phép cross-origin resource sharing (CORS)                                                                                                               |
+| method-override | Cho phép ghi đè `req.method` dựa trên giá trị của `X-HTTP-Method-Override` (hỗ trợ dùng `POST` thay thế cho `PUT` và `DELETE` nếu client code không hỗ trợ) |
+| morgan          | HTTP request logger                                                                                                                                         |
+| multer          | Xử lý multi-part form (upload files)                                                                                                                        |
+| response-time   | Lưu lại thời gian phản hồi (tính từ lúc bắt đầu middleware đầu tiên đến khi response header được gửi) và ghi vào `X-Response-Time`                          |
+| timeout         | Thiết lập timeout cho request                                                                                                                               |
 
 ## Request và Response
 
@@ -287,15 +339,15 @@ Có thể lưu và cấu hình cho server thông qua method `get` và `set` trê
 
 Khi giá trị của biến cấu hình là true/false, có thể sử dụng các method và properties: `enable()`, `disable()`, `enabled`, `disabled`.
 
-|Biến|Mô tả|
-|--|--|
-|`env`|Environment mode|
-|`view engine`|Template engine được sử dụng
-|`views`|Thư mục chứa templates cần được xử lý bởi template engines, cũng như tìm kiếm template để phản hồi|
-|`view cache`|True để cache các template đã được xử lý|
-|`case sensitive routing`|True nếu muốn so khớp chính xác, xét cả hoa thường|
-|`strict routing`|True nếu muốn so khớp chính xác, tính cả `/` ở cuối. Tức là `/users` và `/users/` là hai PATH khác nhau|
-|`query parser`|False nếu không muốn sử dụng query parser, `'simple'` nếu muốn sử dụng [querystring](http://nodejs.org/api/querystring.html), `'extended'` nếu muốn sử dụng [qs](https://www.npmjs.org/package/qs) hoặc có thể truyền vào một hàm parser tùy chỉnh|
+| Biến                     | Mô tả                                                                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `env`                    | Environment mode                                                                                                                                                                                                                                   |
+| `view engine`            | Template engine được sử dụng                                                                                                                                                                                                                       |
+| `views`                  | Thư mục chứa templates cần được xử lý bởi template engines, cũng như tìm kiếm template để phản hồi                                                                                                                                                 |
+| `view cache`             | True để cache các template đã được xử lý                                                                                                                                                                                                           |
+| `case sensitive routing` | True nếu muốn so khớp chính xác, xét cả hoa thường                                                                                                                                                                                                 |
+| `strict routing`         | True nếu muốn so khớp chính xác, tính cả `/` ở cuối. Tức là `/users` và `/users/` là hai PATH khác nhau                                                                                                                                            |
+| `query parser`           | False nếu không muốn sử dụng query parser, `'simple'` nếu muốn sử dụng [querystring](http://nodejs.org/api/querystring.html), `'extended'` nếu muốn sử dụng [qs](https://www.npmjs.org/package/qs) hoặc có thể truyền vào một hàm parser tùy chỉnh |
 
 ## Template Engine
 
