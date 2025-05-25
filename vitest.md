@@ -245,6 +245,36 @@ getApples(10)
 mockFn.mock.calls[0] == 10
 ```
 
+### Module
+
+Vitest có thể tự động mock (automock) cho cả một module được `import` (không phải `require()`) với hàm `vi.mock(path, factory)`
+
+Ở chế độ automock, Vitest chỉ thực hiện mocking cho các exports
+- Các arrays được mock ở dạng `[]`
+- Các giá trị primitives và collections sẽ không thay đổi giá trị
+- Các objects, class instances và prototypes đều được cloned (deep)
+
+Ngoài ra, có thể tùy chỉnh cách thức mock bằng hai cách:
+- Cung cấp `factory` (một hàm trả về các đối tượng mocks, tương tự các đối tượng được exports) cho `vi.mock()`
+- Định nghĩa trong thư mục `__mocks__` ở *cùng cấp* với module được mock, hoặc ở *thư mục gốc nếu nó là một module bên thứ ba*.
+
+```txt
+- __mocks__
+  - axios.js
+- src
+  __mocks__
+    - increment.js
+  - increment.js
+- tests
+  - increment.test.js
+```
+
+Mặc định các lời gọi `vi.mock` sẽ được hoisted lên trên cùng trong module, như thế sẽ được thực thi trước tất cả các lệnh `import`.
+
+Có thể sử dụng `vi.doMock` để không hoisted (và có thể truy cập các biến khai báo ở module), nhưng mock chỉ có tác dụng đối với các lệnh `import` phía sau.
+
+Nếu muốn sử dụng lại hoạt động thực sự của module, ta sử dụng `vi.unmock(path)` (cũng hoisted, nên gần như chỉ có ý nghĩa unmock với các modules trong `setupFiles`) và `vi.doUnmock(path)`
+
 ## Vitest + Prisma
 
 Tham khảo: [Series: Testing with Prisma](https://www.prisma.io/blog/series/ultimate-guide-to-testing-eTzz0U4wwV)
@@ -261,9 +291,33 @@ mkdir libs
 touch libs/prisma.ts
 
 npm i -D vitest-mock-extended
-# update the `test/sample.test.ts` with `vi.mock('../libs/prisma')`
-
-# create mocks for the whole module
-mkdir libs/__mocks__
-touch libs/__mocks__/prisma.ts
 ```
+
+Về Mocking
+- Mock toàn bộ `PrismaClient` với `vitest-mock-extended`, sau đó sử dụng `vi.mock('../libs/prisma.ts')` để mock toàn bộ module
+
+```ts
+// libs/__mocks__/prisma.ts
+import { PrismaClient } from '@prisma/client';
+import { beforeEach } from 'vitest';
+import { mockDeep, mockReset } from 'vitest-mock-extended';
+
+beforeEach(() => {
+  // reset mocked functions and object to original state
+  mockReset(prisma);
+});
+
+// deep mock all functions at all nested levels to `vi.fn()` for PrismaClient instance
+const prisma = mockDeep<PrismaClient>();
+export default prisma;
+```
+
+- Sử dụng `mockResolvedValue`, `mockResolvedValueOnce`,... để mock kết quả truy vấn
+- Sử dụng `mockImplementation` nếu muốn mock lỗi xảy ra trong quá trình truy vấn
+- Đối với transaction
+  - Có thể mock tương tự một hàm thông thường nếu chỉ quan tâm đến kết quả
+  - Đối với logic bên trong transaction, có thể `mockImplementation` đối với `$transaction`, ở đó truyền mock instance của `PrismaClient`
+
+Về Unit Testing
+- Tạo tệp config `vitest.config.unit.ts`
+- Cập nhật `package.json` script: `"test:unit": "vitest -c ./vitest.config.unit.ts"`
