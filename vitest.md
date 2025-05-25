@@ -244,3 +244,26 @@ getApples(10)
 // assert a call with arguments
 mockFn.mock.calls[0] == 10
 ```
+
+## Vitest + Prisma
+
+Tham khảo: [Series: Testing with Prisma](https://www.prisma.io/blog/series/ultimate-guide-to-testing-eTzz0U4wwV)
+
+```bash
+npx try-prisma --template "orm/script" --name "vitest-prisma" --install npm
+cd vitest-prisma
+
+npx prisma migrate dev
+npm i -D vitest
+
+mkdir test
+mkdir libs
+touch libs/prisma.ts
+
+npm i -D vitest-mock-extended
+# update the `test/sample.test.ts` with `vi.mock('../libs/prisma')`
+
+# create mocks for the whole module
+mkdir libs/__mocks__
+touch libs/__mocks__/prisma.ts
+```
