@@ -71,7 +71,9 @@ export default defineConfig({
 })
 ```
 
-> Dù thế nào thì Vitest cũng sử dụng bộ công cụ từ Vite, nên trong tệp cấu hình vẫn nên có các cấu hình cho Vite
+> Dù thế nào thì Vitest cũng sử dụng bộ công cụ từ Vite, nên trong tệp cấu hình vẫn nên có các cấu hình cho Vite.
+> 
+> Ví dụ như `resolve.alias` (tương tự như `tsconfig.json#compilerOptions.paths`, nhưng dành cho ESBuild)
 
 ## API
 
@@ -275,6 +277,27 @@ Có thể sử dụng `vi.doMock` để không hoisted (và có thể truy cập
 
 Nếu muốn sử dụng lại hoạt động thực sự của module, ta sử dụng `vi.unmock(path)` (cũng hoisted, nên gần như chỉ có ý nghĩa unmock với các modules trong `setupFiles`) và `vi.doUnmock(path)`
 
+Nếu không thích cách thiết kế để `__mocks__` folder ngay trong code `src`, ta có thể sử dụng module loader để nạp mocked module
+
+```ts
+// /src
+//   /services
+//     create_user.ts
+//   /repositories
+//     user_repository.ts
+
+// /tests
+//   /__mocks__
+//     user_repository.ts
+//   /unit
+//     create_user.test.ts
+
+// tests/unit/create_user.test.ts
+vi.mock('@/repositories/user_repository', () => {
+  return import('../__mocks__/user_repository')
+})
+```
+
 ## Vitest + Prisma
 
 Tham khảo: [Series: Testing with Prisma](https://www.prisma.io/blog/series/ultimate-guide-to-testing-eTzz0U4wwV)
@@ -293,7 +316,8 @@ touch libs/prisma.ts
 npm i -D vitest-mock-extended
 ```
 
-Về Mocking
+### Về Mocking
+
 - Mock toàn bộ `PrismaClient` với `vitest-mock-extended`, sau đó sử dụng `vi.mock('../libs/prisma.ts')` để mock toàn bộ module
 
 ```ts
@@ -302,13 +326,14 @@ import { PrismaClient } from '@prisma/client';
 import { beforeEach } from 'vitest';
 import { mockDeep, mockReset } from 'vitest-mock-extended';
 
+// deep mock all functions at all nested levels to `vi.fn()` for PrismaClient instance
+const prisma = mockDeep<PrismaClient>();
+
 beforeEach(() => {
   // reset mocked functions and object to original state
   mockReset(prisma);
 });
 
-// deep mock all functions at all nested levels to `vi.fn()` for PrismaClient instance
-const prisma = mockDeep<PrismaClient>();
 export default prisma;
 ```
 
@@ -318,6 +343,140 @@ export default prisma;
   - Có thể mock tương tự một hàm thông thường nếu chỉ quan tâm đến kết quả
   - Đối với logic bên trong transaction, có thể `mockImplementation` đối với `$transaction`, ở đó truyền mock instance của `PrismaClient`
 
-Về Unit Testing
+### Về Unit Testing
 - Tạo tệp config `vitest.config.unit.ts`
-- Cập nhật `package.json` script: `"test:unit": "vitest -c ./vitest.config.unit.ts"`
+  - Chỉ `include` những test file trong thư mục `test/integration`
+- Cập nhật `package.json#scripts`: `"test:unit": "vitest -c ./vitest.config.unit.ts"`
+- Unit testing thường yêu cầu mock, nên cần reset mocks trước mỗi test:
+
+```ts
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+```
+
+### Về Integration Testing
+
+- Tạo tệp config `vitest.config.integration.ts`
+  - Chỉ `include` những test file trong thư mục `test/integration`
+  - Thông thường integration không nên để chạy song song `threads: false`, vì cần tương tác với database
+- Để tạo request tới server, có thể sử dụng [supertest](https://www.npmjs.com/package/supertest)
+- Integration test cần thực hiện tương tác với database, nên cần reset database trước mỗi test
+
+```ts
+// src/tests/helpers/setup.integration.ts
+import { PrismaClient } from '@prisma/client'
+import { beforeEach } from 'vitest'
+
+const databaseTestUrl = process.env.DATABASE_URL
+
+const prisma = new PrismaClient({ datasources: { db: { url: databaseTestUrl } } })
+export default prisma
+
+beforeEach(async () => {
+  await prisma.$transaction([
+    prisma.tag.deleteMany(),
+    prisma.quote.deleteMany(),
+    prisma.user.deleteMany()
+  ])
+})
+```
+
+Khi chạy Integration Test, có thể sử dụng Docker cho database container, và sử dụng script sau:
+
+```sh
+# scripts/run-integration.sh
+
+#!/usr/bin/env bash
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+# load .env
+export $(grep -v '^#' .env.test | xargs)
+
+docker-compose up -d
+
+echo '🟡 - Waiting for database to be ready...'
+########## Using wait-for-it
+# $DIR/wait-for-it.sh "${DATABASE_URL}" -- echo '🟢 - Database is ready!'
+
+########## Using docker check Health
+    # healthcheck:
+    #   test: ["CMD", "pg_isready", "-U", "postgres"]
+    #   interval: 5s
+    #   timeout: 3s
+    #   retries: 5
+until [ "$(docker inspect -f '{{.State.Health.Status}}' db)" == "healthy" ]; do
+  echo "⏳ Waiting for database to become healthy..."
+  sleep 1
+done
+
+npx prisma migrate dev --name init
+
+vitest -c ./vitest.config.integration.ts
+```
+
+và cập nhật `package.json#scripts`: `"test:int": "scripts/run-integration.sh"`
+
+### Về CI
+
+Các bước setups để chạy Unit Test và Integration Test với GitHub Actions:
+- Tạo action `.github/actions/build/action.yml` để chứa các setup dùng chung (build môi trường)
+- Tạo action `.github/actions/docker-compose/action.yml` để cấu hình có thể chạy docker-compose
+
+
+```yml
+# .github/actions/build/action.yml
+name: 'Build'
+description: 'Sets up the repository'
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: latest
+    - name: Install Node.js
+      uses: actions/setup-node@v3
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install
+
+# .github/actions/docker-compose/action.yml
+name: 'Docker-Compose Setup'
+description: 'Sets up docker-compose'
+runs:
+  using: 'composite'
+  steps:
+    - name: Download Docker-Compose plugin
+      shell: bash
+      run: curl -SL https://github.com/docker/compose/releases/download/v2.16.0/docker-compose-linux-x86_64 -o /usr/local/bin/docker-compose
+    - name: Make plugin executable
+      shell: bash
+      run: sudo chmod +x /usr/local/bin/docker-compose
+
+
+# .github/workflows/tests.yml
+name: Tests
+on:
+  pull_request:
+    branches:
+      - main
+env:
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/my_database
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/build
+      - name: Run tests            
+        run: pnpm test:backend:unit
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/build
+      - uses: ./.github/actions/docker-compose
+      - name: Run tests            
+        run: pnpm test:backend:int
+```
