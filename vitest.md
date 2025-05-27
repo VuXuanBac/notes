@@ -344,8 +344,9 @@ export default prisma;
   - Đối với logic bên trong transaction, có thể `mockImplementation` đối với `$transaction`, ở đó truyền mock instance của `PrismaClient`
 
 ### Về Unit Testing
+
 - Tạo tệp config `vitest.config.unit.ts`
-  - Chỉ `include` những test file trong thư mục `test/integration`
+  - Chỉ `include` những test file trong thư mục `test/unit`
 - Cập nhật `package.json#scripts`: `"test:unit": "vitest -c ./vitest.config.unit.ts"`
 - Unit testing thường yêu cầu mock, nên cần reset mocks trước mỗi test:
 
