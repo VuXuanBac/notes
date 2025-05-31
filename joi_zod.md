@@ -505,13 +505,15 @@ z.instanceof()
 
 Quá trình validation fail sẽ được coi là lỗi, lỗi đó là instance của `$ZodError` (v4 triển khai subclass `ZodError`).
 
-Lỗi validation mang các thông tin sau:
+Lỗi validation mang các thông tin sau (`ZodIssueBase`):
 - `issues`: Các thông tin chi tiết về từng lỗi xảy ra:
-  - `code`: Tên lỗi mô tả kiểu lỗi
+  - `code?`: Tên lỗi mô tả kiểu lỗi
   - `path`: Mảng các thuộc tính xác định vị trí xảy ra lỗi (như là thuộc tính của object)
   - `message`: Thông báo chi tiết về lỗi
-  - `input`: Giá trị đầu vào ở bước validation hiện tại
+  - `input?`: Giá trị đầu vào ở bước validation hiện tại
   - Ngoài ra tùy vào từng lỗi sẽ có thêm các trường đặc biệt, mô tả chi tiết hơn.
+
+Xem thêm: [Zod Github](https://github.com/colinhacks/zod/blob/v4/packages/zod/src/v4/core/errors.ts)
 
 ### Ghi đè thông báo lỗi
 
