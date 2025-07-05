@@ -583,13 +583,13 @@ Package là một module đặc biệt, là một cây thư mục được mô t
 
 Dưới đây là một số trường trong `package.json` mà NodeJS xử lý. [Xem thêm](https://nodejs.org/docs/latest/api/packages.html#nodejs-packagejson-field-definitions)
 
-| Trường    | Mô tả                                                                                                                                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`    | Định danh cho package, dùng khi import                                                                                                  |
-| `main`    | Module mặc định sẽ được import khi import package                                                                                       |
-| `type`    | Xác định module loader (CJS hay ES) sẽ sử dụng khi nạp các module có extension `.js`                                                    |
-| `exports` | Cho phép tạo alias tới các modules trong package, được sử dụng khi module bên ngoài import module bên trong                             |
-| `imports` | Tạo alias tương tự `exports` nhưng chỉ phục vụ nội bộ (phân giải lệnh import ở các modules bên trong). Alias luôn phải bắt đầu bằng `#` |
+| Trường    | Mô tả                                                                                                                                                                                                                                                                                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`    | Định danh cho package, dùng khi import                                                                                                                                                                                                                                               |
+| `main`    | Module mặc định sẽ được import khi import package                                                                                                                                                                                                                                    |
+| `type`    | Xác định module loader (CJS hay ES) sẽ sử dụng khi nạp các module có extension `.js`                                                                                                                                                                                                 |
+| `exports` | Cho phép tạo alias tới các modules trong package, được sử dụng khi module bên ngoài import module bên trong                                                                                                                                                                          |
+| `imports` | Tạo alias tương tự `exports` nhưng chỉ phục vụ nội bộ (phân giải lệnh import ở các modules bên trong). Alias luôn phải bắt đầu bằng `#`. Giống với tính năng [`import map` trên Browser](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap) |
 
 ```js
 // ============ Project files structure ============
