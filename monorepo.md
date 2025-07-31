@@ -25,7 +25,9 @@ Quản lý tập trung được thể hiện qua các đặc điểm sau:
 
 ## Monorepo với Typescript
 
-Tham khảo: https://nx.dev/blog/managing-ts-packages-in-monorepos
+Tham khảo:
+- https://nx.dev/blog/managing-ts-packages-in-monorepos
+- https://moonrepo.dev/docs/guides/javascript/typescript-project-refs
 
 Khi logic của ứng dụng được tách nhỏ thành nhiều projects, điều tất yếu cần làm là liên kết chúng lại, cụ thể chính là cách thức import.
 
@@ -46,11 +48,11 @@ Có thể cải thiện bằng **path aliases**:
 ### References và Composite
 
 Vấn đề trên được giải quyết như sau:
-- Do vấn đề là TS đang coi toàn bộ ứng dụng như một project, nên trước hết, cần setup `tsconfig.json` ở mỗi project để chúng như một ứng dụng độc lập.
-- Tuy nhiên, như vậy việc biên dịch mỗi project lại độc lập với nhau.
-- TS giới thiệu `references` để cho phép chỉ định project A phụ thuộc vào project B (hoặc nhiều projects)
-  - Ở pha biên dịch, đảm bảo project B được biên dịch trước khi biên dịch project A.
-  - Ở pha checking, TS chỉ cần sử dụng declaration file (`.d.ts`) của project B
+- Do vấn đề là TS đang coi toàn bộ ứng dụng như một project, nên trước hết, cần setup project để chúng như một đơn vị độc lập, có biên giới rõ ràng.
+- Tuy nhiên, như vậy việc biên dịch mỗi project lại độc lập với nhau, ý nghĩa chia sẻ mã nguồn khó triển khai.
+- Do đó, TS giới thiệu `references` để chỉ định project A phụ thuộc vào project B (hoặc nhiều projects khác) và
+  - Khi biên dịch, đảm bảo project B được biên dịch trước khi biên dịch project A.
+  - Khi typechecking, TS chỉ cần sử dụng declaration file (`.d.ts`) của project B để kiểm tra.
 - Như vậy, ở project B cần
   - Thiết lập [`declaration: true`](https://www.typescriptlang.org/tsconfig/#declaration), để sinh `.d.ts` cho nó.
   - Cần kiểm tra xem kết quả biên dịch có up-to-date với mã nguồn hay không. Đây là chức năng của [`incremental: true`](https://www.typescriptlang.org/tsconfig/#incremental), cho phép lưu project graph mô tả kết quả biên dịch ra file dạng `.tsbuildinfo` (setting đường dẫn lưu các tệp này qua [`tsBuildInfoFile`](https://www.typescriptlang.org/tsconfig/#tsBuildInfoFile))
@@ -81,12 +83,15 @@ example-monorepo
 
 Trong đó, `apps/myapp` gọi đến một hàm trong `packages/lib-a`, dưới đây là nội dung các tệp `tsconfig`:
 
+- Về config ở mức ứng dụng, ta tách làm hai tệp, một để liệt kê các projects (đường dẫn tới tsconfig file) và một để chứa các configs chung cho toàn bộ ứng dụng.
+
 - `tsconfig.json` ở root xác định các projects của ứng dụng, từ đó, ở root folder, có thể chạy `tsc --build` để build tất cả chúng
 
 ```json
 // tsconfig.json
 {
-  "files": [],
+  "extends": "./tsconfig.base.json",
+  "files": [], // compile no files
   "references": [{ "path": "./packages/lib-a" }, { "path": "./apps/myapp" }]
 }
 ```
@@ -101,14 +106,22 @@ Trong đó, `apps/myapp` gọi đến một hàm trong `packages/lib-a`, dưới
 // tsconfig.base.json
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "NodeNext",
-    "strict": true,
-    "moduleResolution": "NodeNext",
+    // ===== recommend for ECMAScript =====
+    // "target": "ESNext",
+    // "module": "ESNext",
+    // "moduleResolution": "bundler",
+    // "strict": true,
+    // "allowSyntheticDefaultImports": true,
+    // "esModuleInterop": true,
+    // "isolatedModules": true,
+    // ===== recommend for Monoscript =====
     "composite": true,
     // "declaration": true,
+    // "incremental": true,
     "declarationMap": true,
     "sourceMap": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
     "paths": {
       "@example-monorepo/lib-a": ["packages/lib-a/src/index.ts"]
     }
