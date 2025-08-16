@@ -23,6 +23,50 @@ Quản lý tập trung được thể hiện qua các đặc điểm sau:
   - **Do đó mà cũng không cần **path aliases** khi imports dependencies projects**
 - Các scripts có thể chạy ở root và tham chiếu tới script ở từng workspace cụ thể, hoặc chạy đồng thời cho toàn bộ workspaces.
 
+### Dependencies
+
+Dưới đây mô tả một số commands thường dùng khi quản lý dependencies ở monorepo
+
+```bash
+# add `express` as a dependency of just `apps/api` workspace
+npm install -w apps/api express
+
+# add `typescript` as a dependency of all single workspaces
+npm install -ws typescript
+
+# add `prettier` as a dependency of root package
+npm install -D prettier
+
+# add `logger` internal package as a dependency of `apps/api` and `apps/web` workspaces
+npm install @sample/logger@* -w apps/api -w apps/web
+
+# add `eslint` as a dependency of `apps/api` workspace and root package as well
+npm install eslint -w apps/api --include-workspace-root
+
+#############################################
+
+# install all dependencies from all workspaces and root package
+npm install
+
+# install all dependencies from just `apps/api` workspace and root package
+npm install -w apps/api --include-workspace-root
+```
+
+### Scripts
+
+Dưới đây mô tả một số commands thường dùng khi chạy scripts
+
+```bash
+# run dev scripts in `apps/api` and `apps/web` workspaces
+npm run dev -w apps/api -w apps/web
+
+# run dev scripts in all `apps/*` workspaces
+npm run dev -w apps
+
+# run dev scripts in all workspaces, if they defines the `dev` scripts
+npm run dev -ws --if-present
+```
+
 ## Monorepo với Typescript
 
 Tham khảo:
